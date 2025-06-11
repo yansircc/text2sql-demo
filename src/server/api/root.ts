@@ -1,5 +1,6 @@
 import { genSQLRouter } from "@/server/api/routers/gen-sql";
 import { preSQLRouter } from "@/server/api/routers/pre-sql";
+import { runSQLRouter } from "@/server/api/routers/run-sql";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -10,6 +11,7 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 export const appRouter = createTRPCRouter({
 	preSQL: preSQLRouter,
 	genSQL: genSQLRouter,
+	runSQL: runSQLRouter,
 });
 
 // export type definition of API

@@ -18,7 +18,11 @@ import {
  */
 export const createTable = sqliteTableCreator((name) => `text2sql_${name}`);
 
-// 1. 公司客户表
+/**
+ * 1. 公司客户表 (companies)
+ * 描述：存储客户公司的基本信息，包括公司名称、联系方式、地址、客户状态等。支持公海/私海客户管理
+ * 主要用途：管理客户公司档案，跟踪客户状态，支持公海私海转换
+ */
 export const companies = createTable(
 	"companies",
 	(d) => ({
@@ -64,7 +68,11 @@ export const companies = createTable(
 	],
 );
 
-// 2. 联系人表
+/**
+ * 2. 联系人表 (contacts)
+ * 描述：存储客户公司的联系人信息，包括姓名、邮箱、电话、职位等。每个联系人关联一个公司
+ * 主要用途：管理客户公司内的具体联系人，支持多联系人管理，标识主联系人
+ */
 export const contacts = createTable(
 	"contacts",
 	(d) => ({
@@ -96,7 +104,11 @@ export const contacts = createTable(
 	],
 );
 
-// 3. 业务员表
+/**
+ * 3. 业务员表 (salesUsers)
+ * 描述：存储销售人员信息，包括姓名、昵称、头像、部门等。用于跟踪客户负责人
+ * 主要用途：管理销售团队成员信息，关联客户负责人和协作者
+ */
 export const salesUsers = createTable(
 	"sales_users",
 	(d) => ({
@@ -117,7 +129,11 @@ export const salesUsers = createTable(
 	],
 );
 
-// 4. 客户-业务员关系表
+/**
+ * 4. 客户-业务员关系表 (companyUserRelations)
+ * 描述：记录客户公司与业务员的关系，支持一个客户有多个负责人或协作者
+ * 主要用途：管理客户分配关系，支持主负责人和协作者角色
+ */
 export const companyUserRelations = createTable(
 	"company_user_relations",
 	(d) => ({
@@ -142,7 +158,11 @@ export const companyUserRelations = createTable(
 	],
 );
 
-// 5. 跟进动态表
+/**
+ * 5. 跟进动态表 (followUps)
+ * 描述：记录销售人员对客户的跟进记录，包括跟进内容、时间、类型等
+ * 主要用途：追踪客户沟通历史，记录销售活动，分析跟进效果
+ */
 export const followUps = createTable(
 	"follow_ups",
 	(d) => ({
@@ -173,7 +193,11 @@ export const followUps = createTable(
 	],
 );
 
-// 6. 商机表
+/**
+ * 6. 商机表 (opportunities)
+ * 描述：存储销售商机信息，包括商机名称、金额、阶段、负责人等。追踪销售进展
+ * 主要用途：管理销售机会，跟踪商机进展，统计销售业绩
+ */
 export const opportunities = createTable(
 	"opportunities",
 	(d) => ({
@@ -210,7 +234,11 @@ export const opportunities = createTable(
 	],
 );
 
-// 7. WhatsApp消息表
+/**
+ * 7. WhatsApp消息表 (whatsappMessages)
+ * 描述：存储WhatsApp聊天消息记录，包括消息内容、发送方、接收方、时间等
+ * 主要用途：记录客户沟通历史，分析消息往来，支持客户服务和销售跟进
+ */
 export const whatsappMessages = createTable(
 	"whatsapp_messages",
 	(d) => ({

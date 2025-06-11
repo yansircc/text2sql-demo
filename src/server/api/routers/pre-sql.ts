@@ -124,14 +124,27 @@ export const PreSQLSchema = z.object({
 				.array(
 					z.object({
 						field: z.string().describe("时间字段名"),
+						dataType: z
+							.enum(["integer", "text", "real"])
+							.describe(
+								"数据库中的存储类型：integer(Unix时间戳), text(ISO字符串), real(浮点时间戳)",
+							),
 						format: z
 							.enum(["timestamp", "datetime", "date"])
-							.describe("时间格式"),
+							.describe(
+								"时间格式：timestamp(Unix时间戳), datetime(日期时间), date(仅日期)",
+							),
 						timezone: z.string().optional().describe("时区信息"),
+						sqlCastFunction: z
+							.string()
+							.optional()
+							.describe(
+								"SQL中需要的类型转换函数模板，如：'CAST(strftime(...) AS INTEGER)', 'datetime(...)', 'CAST(strftime(...) AS REAL)' 等",
+							),
 					}),
 				)
 				.optional()
-				.describe("时间字段的格式和处理方式"),
+				.describe("时间字段的详细类型信息和SQL处理方式"),
 
 			// 是否需要去重
 			distinct: z.boolean().optional().describe("是否需要 DISTINCT 去重"),
@@ -170,11 +183,14 @@ export const preSQLRouter = createTRPCRouter({
 数据库Schema: ${input.databaseSchema}
 上下文: ${input.context || "无"}
 
-请分析用户查询并生成简洁的分析报告：
+请基于schema元数据智能分析用户查询，生成精准的分析报告：
 
 1. 判断查询难易程度（2张表以下=简单，3-5张表=中等，5张表以上=困难）
 2. 用自然语言描述需要哪些表和字段
-3. **重要：精确选择需要的表和字段**，只选择查询真正需要的表和字段，这将用于后续SQL生成时的schema精简
+3. **重要：智能选择表和字段**，基于schema元数据和业务语义：
+   - 优先选择有完整约束（required、有默认值）的字段
+   - 根据字段描述匹配查询需求
+   - 考虑字段间的逻辑关系和数据完整性
 4. 列出逻辑分析步骤（每步一句话）
 5. 识别时间范围（如果有的话）
 6. 判断是否需要语义搜索（模糊匹配、相似性搜索等）
@@ -188,16 +204,31 @@ export const preSQLRouter = createTRPCRouter({
     - 聚合函数（aggregations）：如果需要"总数"、"平均值"、"最大值"等
     - 表关联（joins）：多表查询时的关联方式和条件
     - 特殊条件（specialConditions）：如"活跃的"、"未删除的"等业务条件
-    - 时间字段提示（timeFieldHints）：标注时间字段的格式（如 createdAt 是 timestamp）
+    - 时间字段提示（timeFieldHints）：分析涉及的时间字段，推断存储类型和SQL处理方式
     - 去重需求（distinct）：如果需要"唯一的"、"不重复的"等
 
-**特别注意**：
-- selectedTables 必须使用数据库中实际存在的表名和字段名
-- 时间字段通常是 timestamp 格式（Unix 时间戳），需要在 timeFieldHints 中标注
+**核心原则**：
+- 基于提供的schema严格选择存在的表名和字段名
+- 利用schema中的元数据（type、description、required等）做出最佳判断
+- **时间字段分析原则**：根据schema元数据自主判断：
+  * 分析字段的 type (number/string)、description、required 状态
+  * 根据 type + description 推断存储格式（timestamp/datetime/date）
+  * 考虑字段的完整性（required字段通常比optional更可靠）
+- 在 timeFieldHints 中必须提供：dataType(存储类型)、format(时间格式)、sqlCastFunction(SQL转换函数)
+- **SQL转换函数自动推断**：根据分析的存储类型自动选择：
+  * 数值类型 + 时间戳语义 → "CAST(strftime(...) AS INTEGER/REAL)"
+  * 字符串类型 + 时间语义 → "datetime(...)" 或 "strftime(...)"
+  * 转换函数应为模板形式，使用占位符表示具体时间表达式
 - 分析用户查询的隐含需求，如"今天新增的客户"可能需要按时间倒序排列
 - 对于列表查询，考虑是否需要添加默认的数量限制
 
-保持回答简洁明了，使用自然语言而不是技术术语。`;
+**分析要求**：
+- 充分理解schema结构和字段语义
+- 基于元数据做出最优的字段选择决策  
+- 生成准确的时间处理策略
+- 保持分析结果的通用性和可扩展性
+
+使用自然语言描述，避免过度技术化的表达。`;
 
 				const { object: preSQL } = await generateObject({
 					model: openai("gpt-4.1"),
@@ -234,7 +265,7 @@ export const preSQLRouter = createTRPCRouter({
 				// 解析完整的数据库 schema
 				const fullSchema = JSON.parse(input.fullDatabaseSchema);
 
-				// 构建精简的 schema
+				// 构建精简的 schema，保留 description 信息
 				const slimSchema: Record<string, any> = {};
 
 				for (const tableSelection of input.selectedTables) {
@@ -254,6 +285,7 @@ export const preSQLRouter = createTRPCRouter({
 						if (tableSchema.properties) {
 							for (const field of fields) {
 								if (tableSchema.properties[field]) {
+									// 完整复制字段定义，包括 description
 									slimSchema[tableName].properties[field] =
 										tableSchema.properties[field];
 								}

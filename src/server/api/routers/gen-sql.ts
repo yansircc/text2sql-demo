@@ -11,68 +11,6 @@ const SQLGenerationResult = z.object({
 	sql: z.string().describe("生成的 SQL 语句"),
 });
 
-// // PreSQL 输入结构（包含新增的 sqlHints）
-// const PreSQLInput = z.object({
-// 	difficulty: z.enum(["simple", "medium", "hard"]),
-// 	tablesAndFields: z.string(),
-// 	selectedTables: z.array(
-// 		z.object({
-// 			tableName: z.string(),
-// 			fields: z.array(z.string()),
-// 			reason: z.string(),
-// 		}),
-// 	),
-// 	analysisSteps: z.array(z.string()),
-// 	timeRange: z.string().optional(),
-// 	needsSemanticSearch: z.boolean(),
-// 	queryType: z.string(),
-// 	difficultyReason: z.string().optional(),
-// 	sqlHints: z
-// 		.object({
-// 			orderBy: z
-// 				.array(
-// 					z.object({
-// 						field: z.string(),
-// 						direction: z.enum(["ASC", "DESC"]),
-// 					}),
-// 				)
-// 				.optional(),
-// 			groupBy: z.array(z.string()).optional(),
-// 			limit: z.number().optional(),
-// 			aggregations: z
-// 				.array(
-// 					z.object({
-// 						function: z.enum(["COUNT", "SUM", "AVG", "MAX", "MIN"]),
-// 						field: z.string(),
-// 						alias: z.string().optional(),
-// 					}),
-// 				)
-// 				.optional(),
-// 			joins: z
-// 				.array(
-// 					z.object({
-// 						type: z.enum(["INNER", "LEFT", "RIGHT", "FULL"]),
-// 						fromTable: z.string(),
-// 						toTable: z.string(),
-// 						condition: z.string(),
-// 					}),
-// 				)
-// 				.optional(),
-// 			specialConditions: z.array(z.string()).optional(),
-// 			timeFieldHints: z
-// 				.array(
-// 					z.object({
-// 						field: z.string(),
-// 						format: z.enum(["timestamp", "datetime", "date"]),
-// 						timezone: z.string().optional(),
-// 					}),
-// 				)
-// 				.optional(),
-// 			distinct: z.boolean().optional(),
-// 		})
-// 		.optional(),
-// });
-
 export const genSQLRouter = createTRPCRouter({
 	// 基于 PreSQL 生成 SQL 语句 - 只生成 SQL，不做任何其他分析
 	generateSQL: publicProcedure
@@ -132,10 +70,19 @@ export const genSQLRouter = createTRPCRouter({
 					}
 					if (hints.timeFieldHints?.length) {
 						sqlHintsPrompt +=
-							"\n- 时间字段格式: " +
+							"\n- 时间字段详情: " +
 							hints.timeFieldHints
-								.map((t) => `${t.field} 是 ${t.format} 格式`)
-								.join(", ");
+								.map((t) => {
+									const parts = [
+										`${t.field} (${t.dataType}类型`,
+										`${t.format}格式)`,
+									];
+									if (t.sqlCastFunction) {
+										parts.push(`转换函数: ${t.sqlCastFunction}`);
+									}
+									return parts.join(", ");
+								})
+								.join("; ");
 					}
 					if (hints.distinct) {
 						sqlHintsPrompt += "\n- 需要去重 (DISTINCT)";
@@ -146,6 +93,7 @@ export const genSQLRouter = createTRPCRouter({
 				const systemPrompt = `你是一个 SQL 生成专家。基于预分析结果，生成准确的 SQL 语句。
 
 当前时间: ${currentTime}
+**数据库类型: SQLite**
 
 **查询类型:** ${input.preSQL.queryType}
 **时间范围:** ${input.preSQL.timeRange || "无特定时间限制"}
@@ -165,20 +113,23 @@ ${input.preSQL.selectedTables
 
 ${sqlHintsPrompt ? `**SQL 生成提示:**${sqlHintsPrompt}` : ""}
 
-**重要说明:**
-1. 对于 timestamp 格式的时间字段，需要正确处理：
-   - 使用 FROM_UNIXTIME() 函数转换为可读日期（MySQL）
-   - 或使用适当的时间比较（直接比较时间戳值）
-2. "今天"是指从今天 00:00:00 到 23:59:59
-3. 确保 SQL 语法正确，字段名和表名与 schema 完全一致
-4. 如果有排序要求但没指定字段，默认使用时间字段倒序
+**数据库规范（SQLite）:**
+1. **时间字段处理**：根据 timeFieldHints 中的类型信息和转换函数模板
+   - 严格按照提供的 sqlCastFunction 模板生成时间比较条件
+   - 确保数据类型匹配（避免字符串与数值直接比较）
+2. **时间函数库**：
+   - 时间戳生成：strftime('%s', ...) 
+   - 时间格式化：datetime(...) 
+   - 时间运算：使用修饰符如 '+1 day', '-1 day', 'start of day' 等
+3. **类型转换**：当需要类型匹配时使用 CAST(...AS type)
+4. **语法标准**：确保符合 SQLite 语法规范，避免其他数据库特有函数
 
 只需要生成 SQL 语句，不需要其他任何分析或建议。`;
 
 				console.log("systemPrompt: " + systemPrompt);
 
 				const { object: result } = await generateObject({
-					model: openai("gpt-4o-mini"),
+					model: openai("gpt-4.1"),
 					system: systemPrompt,
 					prompt: "请生成 SQL 语句。",
 					schema: SQLGenerationResult,
