@@ -1,4 +1,5 @@
-import { postRouter } from "@/server/api/routers/post";
+import { genSQLRouter } from "@/server/api/routers/gen-sql";
+import { preSQLRouter } from "@/server/api/routers/pre-sql";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -7,7 +8,8 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
-	post: postRouter,
+	preSQL: preSQLRouter,
+	genSQL: genSQLRouter,
 });
 
 // export type definition of API

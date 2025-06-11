@@ -1,0 +1,965 @@
+{
+	"version": "6",
+	"dialect": "sqlite",
+	"id": "b713f36f-8642-493c-b9ac-522273ef7820",
+	"prevId": "00000000-0000-0000-0000-000000000000",
+	"tables": {
+		"text2sql_companies": {
+			"name": "text2sql_companies",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"companyId": {
+					"name": "companyId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"name": {
+					"name": "name",
+					"type": "text(500)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"serialId": {
+					"name": "serialId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"shortName": {
+					"name": "shortName",
+					"type": "text(200)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"country": {
+					"name": "country",
+					"type": "text(10)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"countryName": {
+					"name": "countryName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"timezone": {
+					"name": "timezone",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"poolName": {
+					"name": "poolName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"groupName": {
+					"name": "groupName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"trailStatus": {
+					"name": "trailStatus",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"star": {
+					"name": "star",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"homepage": {
+					"name": "homepage",
+					"type": "text(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"address": {
+					"name": "address",
+					"type": "text(1000)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"remark": {
+					"name": "remark",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createTime": {
+					"name": "createTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"updateTime": {
+					"name": "updateTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"privateTime": {
+					"name": "privateTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"publicTime": {
+					"name": "publicTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"isPrivate": {
+					"name": "isPrivate",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"customerRecycle42349295325607": {
+					"name": "customerRecycle42349295325607",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"quoteCustomer42086173429707": {
+					"name": "quoteCustomer42086173429707",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"hasWebsite20753699812867": {
+					"name": "hasWebsite20753699812867",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"searchKeywords7375691812971": {
+					"name": "searchKeywords7375691812971",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"mainBusiness7375678270531": {
+					"name": "mainBusiness7375678270531",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"inquiryKeywords22467658539": {
+					"name": "inquiryKeywords22467658539",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"requiredProducts19978277361": {
+					"name": "requiredProducts19978277361",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"publicAllocation19977530773": {
+					"name": "publicAllocation19977530773",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_companies_companyId_unique": {
+					"name": "text2sql_companies_companyId_unique",
+					"columns": ["companyId"],
+					"isUnique": true
+				},
+				"companies_company_id_idx": {
+					"name": "companies_company_id_idx",
+					"columns": ["companyId"],
+					"isUnique": false
+				},
+				"companies_name_idx": {
+					"name": "companies_name_idx",
+					"columns": ["name"],
+					"isUnique": false
+				},
+				"companies_country_idx": {
+					"name": "companies_country_idx",
+					"columns": ["country"],
+					"isUnique": false
+				},
+				"companies_is_private_idx": {
+					"name": "companies_is_private_idx",
+					"columns": ["isPrivate"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_company_user_relations": {
+			"name": "text2sql_company_user_relations",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"companyId": {
+					"name": "companyId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"userId": {
+					"name": "userId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"relationType": {
+					"name": "relationType",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": "'owner'"
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"company_user_relations_company_id_idx": {
+					"name": "company_user_relations_company_id_idx",
+					"columns": ["companyId"],
+					"isUnique": false
+				},
+				"company_user_relations_user_id_idx": {
+					"name": "company_user_relations_user_id_idx",
+					"columns": ["userId"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"text2sql_company_user_relations_companyId_text2sql_companies_companyId_fk": {
+					"name": "text2sql_company_user_relations_companyId_text2sql_companies_companyId_fk",
+					"tableFrom": "text2sql_company_user_relations",
+					"tableTo": "text2sql_companies",
+					"columnsFrom": ["companyId"],
+					"columnsTo": ["companyId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				},
+				"text2sql_company_user_relations_userId_text2sql_sales_users_userId_fk": {
+					"name": "text2sql_company_user_relations_userId_text2sql_sales_users_userId_fk",
+					"tableFrom": "text2sql_company_user_relations",
+					"tableTo": "text2sql_sales_users",
+					"columnsFrom": ["userId"],
+					"columnsTo": ["userId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_contacts": {
+			"name": "text2sql_contacts",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"customerId": {
+					"name": "customerId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"companyId": {
+					"name": "companyId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"name": {
+					"name": "name",
+					"type": "text(200)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"email": {
+					"name": "email",
+					"type": "text(255)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"gender": {
+					"name": "gender",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"post": {
+					"name": "post",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"whatsapp": {
+					"name": "whatsapp",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"telAreaCode": {
+					"name": "telAreaCode",
+					"type": "text(10)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"tel": {
+					"name": "tel",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"isMain": {
+					"name": "isMain",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"remark": {
+					"name": "remark",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_contacts_customerId_unique": {
+					"name": "text2sql_contacts_customerId_unique",
+					"columns": ["customerId"],
+					"isUnique": true
+				},
+				"contacts_customer_id_idx": {
+					"name": "contacts_customer_id_idx",
+					"columns": ["customerId"],
+					"isUnique": false
+				},
+				"contacts_company_id_idx": {
+					"name": "contacts_company_id_idx",
+					"columns": ["companyId"],
+					"isUnique": false
+				},
+				"contacts_email_idx": {
+					"name": "contacts_email_idx",
+					"columns": ["email"],
+					"isUnique": false
+				},
+				"contacts_whatsapp_idx": {
+					"name": "contacts_whatsapp_idx",
+					"columns": ["whatsapp"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"text2sql_contacts_companyId_text2sql_companies_companyId_fk": {
+					"name": "text2sql_contacts_companyId_text2sql_companies_companyId_fk",
+					"tableFrom": "text2sql_contacts",
+					"tableTo": "text2sql_companies",
+					"columnsFrom": ["companyId"],
+					"columnsTo": ["companyId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_follow_ups": {
+			"name": "text2sql_follow_ups",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"followUpId": {
+					"name": "followUpId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"companyId": {
+					"name": "companyId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"customerId": {
+					"name": "customerId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"opportunityId": {
+					"name": "opportunityId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"userId": {
+					"name": "userId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"content": {
+					"name": "content",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"type": {
+					"name": "type",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 101
+				},
+				"createTime": {
+					"name": "createTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_follow_ups_followUpId_unique": {
+					"name": "text2sql_follow_ups_followUpId_unique",
+					"columns": ["followUpId"],
+					"isUnique": true
+				},
+				"follow_ups_company_id_idx": {
+					"name": "follow_ups_company_id_idx",
+					"columns": ["companyId"],
+					"isUnique": false
+				},
+				"follow_ups_user_id_idx": {
+					"name": "follow_ups_user_id_idx",
+					"columns": ["userId"],
+					"isUnique": false
+				},
+				"follow_ups_create_time_idx": {
+					"name": "follow_ups_create_time_idx",
+					"columns": ["createTime"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"text2sql_follow_ups_companyId_text2sql_companies_companyId_fk": {
+					"name": "text2sql_follow_ups_companyId_text2sql_companies_companyId_fk",
+					"tableFrom": "text2sql_follow_ups",
+					"tableTo": "text2sql_companies",
+					"columnsFrom": ["companyId"],
+					"columnsTo": ["companyId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				},
+				"text2sql_follow_ups_customerId_text2sql_contacts_customerId_fk": {
+					"name": "text2sql_follow_ups_customerId_text2sql_contacts_customerId_fk",
+					"tableFrom": "text2sql_follow_ups",
+					"tableTo": "text2sql_contacts",
+					"columnsFrom": ["customerId"],
+					"columnsTo": ["customerId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				},
+				"text2sql_follow_ups_userId_text2sql_sales_users_userId_fk": {
+					"name": "text2sql_follow_ups_userId_text2sql_sales_users_userId_fk",
+					"tableFrom": "text2sql_follow_ups",
+					"tableTo": "text2sql_sales_users",
+					"columnsFrom": ["userId"],
+					"columnsTo": ["userId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_opportunities": {
+			"name": "text2sql_opportunities",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"opportunityId": {
+					"name": "opportunityId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"name": {
+					"name": "name",
+					"type": "text(500)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"serialId": {
+					"name": "serialId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"companyId": {
+					"name": "companyId",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"mainUserId": {
+					"name": "mainUserId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"amount": {
+					"name": "amount",
+					"type": "real",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"currency": {
+					"name": "currency",
+					"type": "text(10)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": "'USD'"
+				},
+				"stageName": {
+					"name": "stageName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"typeName": {
+					"name": "typeName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"originName": {
+					"name": "originName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"remark": {
+					"name": "remark",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createTime": {
+					"name": "createTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"updateTime": {
+					"name": "updateTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"orderTime": {
+					"name": "orderTime",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_opportunities_opportunityId_unique": {
+					"name": "text2sql_opportunities_opportunityId_unique",
+					"columns": ["opportunityId"],
+					"isUnique": true
+				},
+				"opportunities_company_id_idx": {
+					"name": "opportunities_company_id_idx",
+					"columns": ["companyId"],
+					"isUnique": false
+				},
+				"opportunities_main_user_id_idx": {
+					"name": "opportunities_main_user_id_idx",
+					"columns": ["mainUserId"],
+					"isUnique": false
+				},
+				"opportunities_amount_idx": {
+					"name": "opportunities_amount_idx",
+					"columns": ["amount"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {
+				"text2sql_opportunities_companyId_text2sql_companies_companyId_fk": {
+					"name": "text2sql_opportunities_companyId_text2sql_companies_companyId_fk",
+					"tableFrom": "text2sql_opportunities",
+					"tableTo": "text2sql_companies",
+					"columnsFrom": ["companyId"],
+					"columnsTo": ["companyId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				},
+				"text2sql_opportunities_mainUserId_text2sql_sales_users_userId_fk": {
+					"name": "text2sql_opportunities_mainUserId_text2sql_sales_users_userId_fk",
+					"tableFrom": "text2sql_opportunities",
+					"tableTo": "text2sql_sales_users",
+					"columnsFrom": ["mainUserId"],
+					"columnsTo": ["userId"],
+					"onDelete": "no action",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_sales_users": {
+			"name": "text2sql_sales_users",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"userId": {
+					"name": "userId",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"nickname": {
+					"name": "nickname",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"name": {
+					"name": "name",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"avatar": {
+					"name": "avatar",
+					"type": "text(500)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"departmentName": {
+					"name": "departmentName",
+					"type": "text(100)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_sales_users_userId_unique": {
+					"name": "text2sql_sales_users_userId_unique",
+					"columns": ["userId"],
+					"isUnique": true
+				},
+				"sales_users_user_id_idx": {
+					"name": "sales_users_user_id_idx",
+					"columns": ["userId"],
+					"isUnique": false
+				},
+				"sales_users_nickname_idx": {
+					"name": "sales_users_nickname_idx",
+					"columns": ["nickname"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		},
+		"text2sql_whatsapp_messages": {
+			"name": "text2sql_whatsapp_messages",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true,
+					"autoincrement": true
+				},
+				"messageId": {
+					"name": "messageId",
+					"type": "text(200)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"timestamp": {
+					"name": "timestamp",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"fromNumber": {
+					"name": "fromNumber",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"toNumber": {
+					"name": "toNumber",
+					"type": "text(50)",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"body": {
+					"name": "body",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"fromMe": {
+					"name": "fromMe",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false
+				},
+				"contactName": {
+					"name": "contactName",
+					"type": "text(200)",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false
+				},
+				"hasMedia": {
+					"name": "hasMedia",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"ack": {
+					"name": "ack",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false,
+					"autoincrement": false,
+					"default": 0
+				},
+				"createdAt": {
+					"name": "createdAt",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"autoincrement": false,
+					"default": "(unixepoch())"
+				}
+			},
+			"indexes": {
+				"text2sql_whatsapp_messages_messageId_unique": {
+					"name": "text2sql_whatsapp_messages_messageId_unique",
+					"columns": ["messageId"],
+					"isUnique": true
+				},
+				"whatsapp_from_number_idx": {
+					"name": "whatsapp_from_number_idx",
+					"columns": ["fromNumber"],
+					"isUnique": false
+				},
+				"whatsapp_to_number_idx": {
+					"name": "whatsapp_to_number_idx",
+					"columns": ["toNumber"],
+					"isUnique": false
+				},
+				"whatsapp_timestamp_idx": {
+					"name": "whatsapp_timestamp_idx",
+					"columns": ["timestamp"],
+					"isUnique": false
+				},
+				"whatsapp_from_me_idx": {
+					"name": "whatsapp_from_me_idx",
+					"columns": ["fromMe"],
+					"isUnique": false
+				}
+			},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"checkConstraints": {}
+		}
+	},
+	"views": {},
+	"enums": {},
+	"_meta": {
+		"schemas": {},
+		"tables": {},
+		"columns": {}
+	},
+	"internal": {
+		"indexes": {}
+	}
+}

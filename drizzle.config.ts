@@ -8,5 +8,6 @@ export default {
 	dbCredentials: {
 		url: env.DATABASE_URL,
 	},
+	out: "./src/server/db/migrations",
 	tablesFilter: ["text2sql_*"],
 } satisfies Config;
