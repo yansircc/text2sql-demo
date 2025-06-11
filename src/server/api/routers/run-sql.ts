@@ -3,7 +3,142 @@ import { db } from "@/server/db";
 import { sql as drizzleSql } from "drizzle-orm";
 import { z } from "zod";
 
+/**
+ * Run SQL Router
+ *
+ * 职责：管道的最后一步 - 执行生成的 SQL 语句
+ *
+ * 主要功能：
+ * 1. 验证 SQL 语句的语法和安全性
+ * 2. 执行 SQL 查询并返回结果
+ * 3. 提供数据库统计信息
+ * 4. 完整管道执行（从 genSQL 结果到最终数据）
+ *
+ * 安全特性：
+ * - 只读模式确保不会修改数据
+ * - SQL 注入防护
+ * - 语法验证
+ * - 危险操作警告
+ */
+
 export const runSQLRouter = createTRPCRouter({
+	// 完整管道执行：从 genSQL 结果到最终数据
+	runPipelineSQL: publicProcedure
+		.input(
+			z.object({
+				genSQLResult: z
+					.object({
+						sql: z.string().describe("生成的 SQL 语句"),
+						explanation: z.string().optional().describe("SQL 解释"),
+						confidence: z.number().optional().describe("置信度"),
+					})
+					.describe("gen-sql 步骤的输出结果"),
+				validate: z.boolean().default(true).describe("是否先验证 SQL"),
+				readOnly: z.boolean().default(true).describe("是否只读模式"),
+			}),
+		)
+		.mutation(async ({ input }) => {
+			const startTime = Date.now();
+
+			try {
+				const { genSQLResult, validate, readOnly } = input;
+				let validationResult = null;
+
+				// 第一步：验证 SQL（如果需要）
+				if (validate) {
+					const sqlUpper = genSQLResult.sql.trim().toUpperCase();
+					const errors: string[] = [];
+					const warnings: string[] = [];
+					let queryType:
+						| "SELECT"
+						| "INSERT"
+						| "UPDATE"
+						| "DELETE"
+						| "DDL"
+						| "OTHER" = "OTHER";
+
+					// 检测 SQL 类型
+					if (sqlUpper.startsWith("SELECT")) {
+						queryType = "SELECT";
+					} else if (sqlUpper.startsWith("INSERT")) {
+						queryType = "INSERT";
+					} else if (sqlUpper.startsWith("UPDATE")) {
+						queryType = "UPDATE";
+					} else if (sqlUpper.startsWith("DELETE")) {
+						queryType = "DELETE";
+					} else if (
+						sqlUpper.startsWith("CREATE") ||
+						sqlUpper.startsWith("ALTER") ||
+						sqlUpper.startsWith("DROP")
+					) {
+						queryType = "DDL";
+					}
+
+					// 安全检查
+					if (readOnly && queryType !== "SELECT") {
+						errors.push("只读模式下只允许执行 SELECT 查询");
+					}
+
+					// 基本语法检查
+					const openParens = (genSQLResult.sql.match(/\(/g) || []).length;
+					const closeParens = (genSQLResult.sql.match(/\)/g) || []).length;
+					if (openParens !== closeParens) {
+						errors.push("括号不匹配");
+					}
+
+					// 危险操作警告
+					if (queryType === "DELETE" && !sqlUpper.includes("WHERE")) {
+						warnings.push("DELETE 语句没有 WHERE 条件，将删除所有数据");
+					}
+					if (queryType === "UPDATE" && !sqlUpper.includes("WHERE")) {
+						warnings.push("UPDATE 语句没有 WHERE 条件，将更新所有数据");
+					}
+
+					validationResult = {
+						isValid: errors.length === 0,
+						errors: errors.length > 0 ? errors : undefined,
+						warnings: warnings.length > 0 ? warnings : undefined,
+						queryType,
+					};
+
+					// 如果验证失败，直接返回
+					if (!validationResult.isValid) {
+						return {
+							success: false,
+							validation: validationResult,
+							executionTime: Date.now() - startTime,
+							error: "SQL 验证失败",
+						};
+					}
+				}
+
+				// 第二步：执行 SQL
+				const result = await db.all(drizzleSql.raw(genSQLResult.sql));
+				const executionTime = Date.now() - startTime;
+
+				return {
+					success: true,
+					validation: validationResult,
+					data: result,
+					rowCount: result.length,
+					executionTime,
+					sqlExecuted: genSQLResult.sql,
+					explanation: genSQLResult.explanation,
+					confidence: genSQLResult.confidence,
+				};
+			} catch (error: any) {
+				console.error("Pipeline SQL 执行错误:", error);
+				const executionTime = Date.now() - startTime;
+
+				return {
+					success: false,
+					error: error.message || "SQL 执行失败",
+					executionTime,
+					sqlExecuted: input.genSQLResult.sql,
+				};
+			}
+		}),
+
 	// 验证 SQL 语句
 	validateSQL: publicProcedure
 		.input(
@@ -205,60 +340,5 @@ export const runSQLRouter = createTRPCRouter({
 			console.error("获取数据库统计信息错误:", error);
 			throw new Error("无法获取数据库统计信息");
 		}
-	}),
-
-	// 获取示例 SQL 查询
-	getSampleQueries: publicProcedure.query(() => {
-		return {
-			samples: [
-				{
-					title: "查看今天新增的客户",
-					sql: `SELECT id, companyId, name, datetime(createdAt, 'unixepoch') as createdTime 
-FROM text2sql_companies 
-WHERE createdAt >= strftime('%s', 'now', 'start of day')
-ORDER BY createdAt DESC 
-LIMIT 20;`,
-					description: "获取今天创建的所有客户信息",
-				},
-				{
-					title: "统计每个业务员的客户数",
-					sql: `SELECT 
-  su.nickname,
-  COUNT(DISTINCT cur.companyId) as customerCount
-FROM text2sql_sales_users su
-LEFT JOIN text2sql_company_user_relations cur ON su.userId = cur.userId
-GROUP BY su.userId, su.nickname
-ORDER BY customerCount DESC;`,
-					description: "统计每个业务员负责的客户数量",
-				},
-				{
-					title: "查看最近的跟进动态",
-					sql: `SELECT 
-  f.content,
-  c.name as companyName,
-  su.nickname as salesPerson,
-  datetime(f.createTime, 'unixepoch') as followUpTime
-FROM text2sql_follow_ups f
-JOIN text2sql_companies c ON f.companyId = c.companyId
-JOIN text2sql_sales_users su ON f.userId = su.userId
-ORDER BY f.createTime DESC
-LIMIT 50;`,
-					description: "查看最近的50条跟进记录",
-				},
-				{
-					title: "商机金额统计",
-					sql: `SELECT 
-  stageName,
-  COUNT(*) as count,
-  SUM(amount) as totalAmount,
-  AVG(amount) as avgAmount
-FROM text2sql_opportunities
-WHERE amount > 0
-GROUP BY stageName
-ORDER BY totalAmount DESC;`,
-					description: "按阶段统计商机的数量和金额",
-				},
-			],
-		};
 	}),
 });

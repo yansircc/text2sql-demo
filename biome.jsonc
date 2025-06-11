@@ -19,6 +19,9 @@
 				"noArrayIndexKey": "off",
 				"noExplicitAny": "off"
 			},
+			"a11y": {
+				"useButtonType": "off"
+			},
 			"style": {
 				"noNonNullAssertion": "off",
 				"useTemplate": "off",
@@ -46,7 +49,11 @@
 					"level": "warn",
 					"fix": "safe",
 					"options": {
-						"functions": ["clsx", "cva", "cn"]
+						"functions": [
+							"clsx",
+							"cva",
+							"cn"
+						]
 					}
 				}
 			},

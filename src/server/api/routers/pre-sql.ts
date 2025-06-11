@@ -6,6 +6,28 @@ import { z } from "zod";
 import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 
+/**
+ * Pre-SQL Router
+ *
+ * 职责：基于预选的表，生成 SQL 构建所需的精确信息
+ *
+ * 输入：
+ * - 用户查询
+ * - 预选的表列表（来自 pre-handle）
+ * - 仅包含相关表的 schema（减少上下文）
+ *
+ * 主要功能：
+ * 1. 从预选的表中选择必要的字段
+ * 2. 生成 SQL 构建步骤
+ * 3. 处理时间范围
+ * 4. 生成 SQL 提示（排序、分组、聚合等）
+ *
+ * 输出：
+ * - 精确的表和字段选择
+ * - SQL 生成提示
+ * - 用于后续 SQL 生成的结构化信息
+ */
+
 // 表字段选择 Schema
 const TableFieldSelection = z.object({
 	tableName: z.string().describe("表名，必须是数据库中实际存在的表名"),
@@ -15,49 +37,24 @@ const TableFieldSelection = z.object({
 	reason: z.string().describe("选择该表和字段的原因"),
 });
 
-// 简化的 PreSQL Schema - 只保留核心信息
+// 简化的 PreSQL Schema - 专注于 SQL 生成
 export const PreSQLSchema = z.object({
-	// 1. 难易程度推断
-	difficulty: z
-		.enum(["simple", "medium", "hard"])
-		.describe("查询难易程度：simple(简单), medium(中等), hard(困难)"),
-	difficultyReason: z.string().describe("难易程度判断的原因，用自然语言描述"),
-
-	// 2. 涉及的表和字段
-	tablesAndFields: z
-		.string()
-		.describe(
-			"需要用到哪些表和字段，用自然语言描述，例如：'需要用户表的姓名和邮箱字段，订单表的金额和时间字段'",
-		),
-
-	// 2.1 结构化的表和字段选择（新增，用于后续 gen-sql）
+	// 结构化的表和字段选择
 	selectedTables: z
 		.array(TableFieldSelection)
 		.describe("精确选择的表和字段列表，用于生成 SQL 时的 schema 精简"),
 
-	// 3. 分析推理步骤
+	// 分析推理步骤
 	analysisSteps: z
 		.array(z.string())
-		.describe("逻辑分析步骤，每个步骤用一句自然语言描述"),
+		.describe("SQL 生成的逻辑步骤，每个步骤用一句话描述"),
 
-	// 4. 时间范围
+	// 时间范围
 	timeRange: z
 		.string()
 		.optional()
 		.describe(
-			"时间范围的自然语言描述，例如：'今天'、'上周到本周'、'2023年1月之前'等，如果没有时间限制则为空",
-		),
-
-	// 5. 是否需要语义搜索
-	needsSemanticSearch: z
-		.boolean()
-		.describe("是否需要语义搜索来补充查询，true或false"),
-
-	// 6. 查询类型
-	queryType: z
-		.string()
-		.describe(
-			"查询类型的自然语言描述，例如：'统计查询'、'详细列表查询'、'关联查询'等",
+			"时间范围的具体描述，例如：'2024-01-01 到 2024-01-31'，如果没有时间限制则为空",
 		),
 
 	// 9. SQL 生成提示（新增）
@@ -167,6 +164,7 @@ export const preSQLRouter = createTRPCRouter({
 					.describe("用户的自然语言查询"),
 				databaseSchema: z.string().describe("数据库schema的JSON字符串"),
 				context: z.string().optional().describe("额外的上下文信息"),
+				preHandleInfo: z.string().optional().describe("预处理阶段的信息"),
 			}),
 		)
 		.mutation(async ({ input }) => {
@@ -176,71 +174,71 @@ export const preSQLRouter = createTRPCRouter({
 					baseURL: env.AIHUBMIX_BASE_URL,
 				});
 
-				const anthropic = createAnthropic({
-					apiKey: env.AIHUBMIX_API_KEY,
-					baseURL: env.AIHUBMIX_BASE_URL,
-				});
-
 				const currentTime = new Date().toISOString();
 
-				const systemPrompt = `你是一个数据库查询分析师。将用户的自然语言查询转换为结构化的预SQL分析。
+				// 解析预处理信息，获取预选的表
+				let selectedTablesSchema = input.databaseSchema;
+				if (input.preHandleInfo) {
+					try {
+						const preHandleData = JSON.parse(input.preHandleInfo);
+						if (
+							preHandleData.selectedTables &&
+							preHandleData.selectedTables.length > 0
+						) {
+							// 只保留预选的表的 schema
+							const fullSchema = JSON.parse(input.databaseSchema);
+							const filteredSchema: Record<string, any> = {};
+
+							for (const tableName of preHandleData.selectedTables) {
+								if (fullSchema[tableName]) {
+									filteredSchema[tableName] = fullSchema[tableName];
+								}
+							}
+
+							selectedTablesSchema = JSON.stringify(filteredSchema);
+						}
+					} catch (e) {
+						console.warn("解析预处理信息失败，使用完整 schema", e);
+					}
+				}
+
+				const systemPrompt = `你是一个SQL生成专家。基于预处理结果和数据库schema，准备SQL生成所需的精确信息。
 
 当前时间: ${currentTime}
-数据库Schema: ${input.databaseSchema}
+数据库Schema（仅包含相关表）: ${selectedTablesSchema}
 上下文: ${input.context || "无"}
+预处理信息: ${input.preHandleInfo || "无"}
 
-请基于schema元数据智能分析用户查询，生成精准的分析报告：
+请生成精简的SQL生成准备信息：
 
-1. 判断查询难易程度（2张表以下=简单，3-5张表=中等，5张表以上=困难）
-2. 用自然语言描述需要哪些表和字段
-3. **重要：智能选择表和字段**，基于schema元数据和业务语义：
-   - 优先选择有完整约束（required、有默认值）的字段
-   - 根据字段描述匹配查询需求
-   - 考虑字段间的逻辑关系和数据完整性
-4. 列出逻辑分析步骤（每步一句话）
-5. 识别时间范围（如果有的话）
-6. 判断是否需要语义搜索（模糊匹配、相似性搜索等）
-7. 描述查询类型
-8. 指出可能的风险或注意事项
-9. 评估分析的信心度
-10. **重要：生成 SQL 提示（sqlHints）**，包括：
-    - 排序需求（orderBy）：如果查询提到"最新"、"最早"、"按...排序"等
-    - 分组需求（groupBy）：如果需要"按...分组"、"每个..."等
-    - 数量限制（limit）：如果提到"前10个"、"最多20条"等
-    - 聚合函数（aggregations）：如果需要"总数"、"平均值"、"最大值"等
-    - 表关联（joins）：多表查询时的关联方式和条件
-    - 特殊条件（specialConditions）：如"活跃的"、"未删除的"等业务条件
-    - 时间字段提示（timeFieldHints）：分析涉及的时间字段，推断存储类型和SQL处理方式
-    - 去重需求（distinct）：如果需要"唯一的"、"不重复的"等
+1. **精确选择表和字段**：
+   - 基于查询需求，从给定的表中选择必要的字段
+   - 严格匹配schema中存在的表名和字段名
+   - 注意：只能使用提供的表，不要引用其他表
 
-**核心原则**：
-- 基于提供的schema严格选择存在的表名和字段名
-- 利用schema中的元数据（type、description、required等）做出最佳判断
-- **时间字段分析原则**：根据schema元数据自主判断：
-  * 分析字段的 type (number/string)、description、required 状态
-  * 根据 type + description 推断存储格式（timestamp/datetime/date）
-  * 考虑字段的完整性（required字段通常比optional更可靠）
-- 在 timeFieldHints 中必须提供：dataType(存储类型)、format(时间格式)、sqlCastFunction(SQL转换函数)
-- **SQL转换函数自动推断**：根据分析的存储类型自动选择：
-  * 数值类型 + 时间戳语义 → "CAST(strftime(...) AS INTEGER/REAL)"
-  * 字符串类型 + 时间语义 → "datetime(...)" 或 "strftime(...)"
-  * 转换函数应为模板形式，使用占位符表示具体时间表达式
-- 分析用户查询的隐含需求，如"今天新增的客户"可能需要按时间倒序排列
-- 对于列表查询，考虑是否需要添加默认的数量限制
+2. **分析步骤**：
+   - 简洁描述SQL构建的逻辑步骤
+   - 每步一句话，专注于SQL实现
 
-**分析要求**：
-- 充分理解schema结构和字段语义
-- 基于元数据做出最优的字段选择决策  
-- 生成准确的时间处理策略
-- 保持分析结果的通用性和可扩展性
+3. **时间处理**：
+   - 将自然语言时间转换为具体时间范围
+   - 识别时间字段的存储格式
 
-使用自然语言描述，避免过度技术化的表达。`;
+4. **SQL提示生成**：
+   - 基于查询需求生成具体的SQL构建提示
+   - 包含必要的排序、分组、聚合、关联等信息
+   - 特别注意时间字段的处理方式
+
+**核心要求**：
+- 只使用提供的表和字段
+- 专注于SQL生成所需的信息
+- 时间处理要具体化，便于SQL实现
+- 保持简洁，避免冗余分析`;
 
 				const { object: preSQL } = await generateObject({
 					model: openai("gpt-4.1"),
-					// model: anthropic("claude-sonnet-4-20250514"),
 					system: systemPrompt,
-					prompt: `请分析这个查询：\n\n"${input.naturalLanguageQuery}"\n\n生成简化的presql分析，特别注意精确选择需要的表和字段。`,
+					prompt: `请分析这个查询：\n\n"${input.naturalLanguageQuery}"\n\n生成SQL准备信息。`,
 					schema: PreSQLSchema,
 					temperature: 0.1,
 				});
@@ -250,6 +248,17 @@ export const preSQLRouter = createTRPCRouter({
 					preSQL,
 					rawQuery: input.naturalLanguageQuery,
 					processingTime: new Date().toISOString(),
+					tablesUsed: (() => {
+						if (selectedTablesSchema === input.databaseSchema) {
+							return "all";
+						}
+						try {
+							const schema = JSON.parse(selectedTablesSchema);
+							return Object.keys(schema);
+						} catch {
+							return [];
+						}
+					})(),
 				};
 			} catch (error) {
 				console.error("PreSQL 生成错误:", error);
@@ -326,9 +335,8 @@ export const preSQLRouter = createTRPCRouter({
 	getPreSQLSchema: publicProcedure.query(() => {
 		return {
 			schema: PreSQLSchema,
-			version: "2.1.0-with-table-selection",
-			description:
-				"简化版 PreSQL 分析结果的数据结构定义，包含表和字段精确选择功能",
+			version: "3.0.0-simplified",
+			description: "精简版 PreSQL - 专注于SQL生成准备",
 		};
 	}),
 });

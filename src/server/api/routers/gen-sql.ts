@@ -7,6 +7,26 @@ import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { PreSQLSchema } from "./pre-sql";
 
+/**
+ * Gen-SQL Router
+ *
+ * 职责：生成最终的 SQL 语句
+ *
+ * 这是管道的最后一步，接收高度精简和结构化的输入：
+ * 1. preSQL - 包含精确的表字段选择和 SQL 生成提示
+ * 2. slimSchema - 仅包含需要的表和字段的 schema
+ *
+ * 设计理念：
+ * - 专注于 SQL 生成，不做任何分析
+ * - 上下文已经被前面的步骤极度精简
+ * - 基于明确的指令生成 SQL，而不是推理
+ *
+ * 优势：
+ * - 极高的准确性（因为上下文精准）
+ * - 快速响应（因为任务单一）
+ * - 易于调试（每个步骤职责清晰）
+ */
+
 // SQL 生成结果 Schema - 极简版，只有 SQL
 const SQLGenerationResult = z.object({
 	sql: z.string().describe("生成的 SQL 语句"),
@@ -101,7 +121,6 @@ export const genSQLRouter = createTRPCRouter({
 当前时间: ${currentTime}
 **数据库类型: SQLite**
 
-**查询类型:** ${input.preSQL.queryType}
 **时间范围:** ${input.preSQL.timeRange || "无特定时间限制"}
 
 **分析步骤:**

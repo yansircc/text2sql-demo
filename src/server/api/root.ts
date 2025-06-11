@@ -1,4 +1,5 @@
 import { genSQLRouter } from "@/server/api/routers/gen-sql";
+import { preHandleRouter } from "@/server/api/routers/pre-handle";
 import { preSQLRouter } from "@/server/api/routers/pre-sql";
 import { runSQLRouter } from "@/server/api/routers/run-sql";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
@@ -9,6 +10,7 @@ import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+	preHandle: preHandleRouter,
 	preSQL: preSQLRouter,
 	genSQL: genSQLRouter,
 	runSQL: runSQLRouter,
