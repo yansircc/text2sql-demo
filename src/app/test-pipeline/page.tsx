@@ -27,6 +27,8 @@ export default function TestPipelinePage() {
 
 			<ProcessDescription />
 
+			<ExampleQueries onQuerySelect={setQuery} />
+
 			<QueryInput query={query} onQueryChange={setQuery} />
 
 			<ActionButtons
@@ -42,8 +44,6 @@ export default function TestPipelinePage() {
 			/>
 
 			<ResultDisplay results={results} />
-
-			<ExampleQueries onQuerySelect={setQuery} />
 		</div>
 	);
 }

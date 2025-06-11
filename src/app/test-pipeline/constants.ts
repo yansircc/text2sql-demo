@@ -1,4 +1,5 @@
 import { generateJsonSchema } from "@/types/db.schema";
+import { lv1, lv2, lv3, lv4, lv5, lv6, lv7 } from "./test-library";
 
 // 使用真实的数据库 schema
 export const realDatabaseSchema = JSON.stringify(generateJsonSchema());
@@ -6,18 +7,92 @@ export const realDatabaseSchema = JSON.stringify(generateJsonSchema());
 // 为了兼容性，保留 mockDatabaseSchema 的名称，但使用真实数据
 export const mockDatabaseSchema = realDatabaseSchema;
 
-export const exampleQueries = [
-	{ text: "显示所有公司客户", label: "显示所有公司客户" },
-	{ text: "找出今天新增的跟进记录", label: "找出今天新增的跟进记录" },
-	{
-		text: "查找名称类似华为的公司",
-		label: "查找名称类似华为的公司（语义搜索）",
-	},
-	{
-		text: "统计每个业务员的客户数量和商机总金额",
-		label: "统计每个业务员的客户数量和商机总金额（复杂查询）",
-	},
-	{ text: "显示商机", label: "显示商机（不清晰查询）" },
-	{ text: "查看张三负责的所有客户及其联系人", label: "多表关联查询" },
-	{ text: "本月新增的商机有哪些", label: "时间范围查询" },
-];
+// 查询任务接口定义
+export interface QueryTask {
+	id: string;
+	text: string;
+	difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+	category: string;
+	description: string;
+	tables: string[];
+}
+
+// 按复杂度分类的查询任务
+export const queryTasks: Record<number, QueryTask[]> = {
+	// 1表查询 - 基础数据统计和筛选
+	1: lv1,
+
+	// 2表查询 - 简单关联分析
+	2: lv2,
+
+	// 3表查询 - 中等复杂度业务分析
+	3: lv3,
+
+	// 4表查询 - 复杂业务场景分析
+	4: lv4,
+
+	// 5表查询 - 高级综合分析
+	5: lv5,
+
+	// 6表查询 - 企业级深度分析
+	6: lv6,
+
+	// 7表查询 - 全景式战略分析
+	7: lv7,
+};
+
+// 获取所有任务的扁平化数组
+export const allTasks: QueryTask[] = Object.values(queryTasks).flat();
+
+// 按难度获取任务
+export function getTasksByDifficulty(
+	difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7,
+): QueryTask[] {
+	return queryTasks[difficulty] || [];
+}
+
+// 按类别获取任务
+export function getTasksByCategory(category: string): QueryTask[] {
+	return allTasks.filter((task) => task.category === category);
+}
+
+// 获取所有类别
+export function getAllCategories(): string[] {
+	return [...new Set(allTasks.map((task) => task.category))];
+}
+
+// 获取随机任务
+export function getRandomTask(
+	difficulty?: 1 | 2 | 3 | 4 | 5 | 6 | 7,
+): QueryTask {
+	const tasks = difficulty ? getTasksByDifficulty(difficulty) : allTasks;
+	if (tasks.length === 0) {
+		throw new Error(`No tasks available for difficulty ${difficulty || "any"}`);
+	}
+	const randomIndex = Math.floor(Math.random() * tasks.length);
+	return tasks[randomIndex]!;
+}
+
+// 获取多个随机任务（不重复）
+export function getRandomTasks(
+	count: number,
+	difficulty?: 1 | 2 | 3 | 4 | 5 | 6 | 7,
+): QueryTask[] {
+	const tasks = difficulty ? getTasksByDifficulty(difficulty) : allTasks;
+	const shuffled = [...tasks].sort(() => Math.random() - 0.5);
+	return shuffled.slice(0, Math.min(count, tasks.length));
+}
+
+// 任务统计信息
+export const taskStats = {
+	total: allTasks.length,
+	byDifficulty: Object.fromEntries(
+		Object.entries(queryTasks).map(([key, tasks]) => [key, tasks.length]),
+	),
+	byCategory: Object.fromEntries(
+		getAllCategories().map((category) => [
+			category,
+			getTasksByCategory(category).length,
+		]),
+	),
+};
