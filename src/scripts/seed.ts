@@ -23,7 +23,7 @@ function randomInt(min: number, max: number): number {
 
 // 生成随机手机号
 function randomPhone(): string {
-	return `+86 ${randomInt(130, 199)} ${randomInt(1000, 9999)} ${randomInt(1000, 9999)}`;
+	return `+86${randomInt(130, 199)}${randomInt(1000, 9999)}${randomInt(1000, 9999)}`;
 }
 
 // 生成随机邮箱

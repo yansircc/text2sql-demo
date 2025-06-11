@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
@@ -175,6 +176,11 @@ export const preSQLRouter = createTRPCRouter({
 					baseURL: env.AIHUBMIX_BASE_URL,
 				});
 
+				const anthropic = createAnthropic({
+					apiKey: env.AIHUBMIX_API_KEY,
+					baseURL: env.AIHUBMIX_BASE_URL,
+				});
+
 				const currentTime = new Date().toISOString();
 
 				const systemPrompt = `你是一个数据库查询分析师。将用户的自然语言查询转换为结构化的预SQL分析。
@@ -231,7 +237,8 @@ export const preSQLRouter = createTRPCRouter({
 使用自然语言描述，避免过度技术化的表达。`;
 
 				const { object: preSQL } = await generateObject({
-					model: openai("gpt-4.1"),
+					// model: openai("gpt-4o"),
+					model: anthropic("claude-sonnet-4-20250514"),
 					system: systemPrompt,
 					prompt: `请分析这个查询：\n\n"${input.naturalLanguageQuery}"\n\n生成简化的presql分析，特别注意精确选择需要的表和字段。`,
 					schema: PreSQLSchema,

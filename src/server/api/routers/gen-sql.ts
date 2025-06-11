@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
@@ -25,6 +26,11 @@ export const genSQLRouter = createTRPCRouter({
 		.mutation(async ({ input }) => {
 			try {
 				const openai = createOpenAI({
+					apiKey: env.AIHUBMIX_API_KEY,
+					baseURL: env.AIHUBMIX_BASE_URL,
+				});
+
+				const anthropic = createAnthropic({
 					apiKey: env.AIHUBMIX_API_KEY,
 					baseURL: env.AIHUBMIX_BASE_URL,
 				});
@@ -129,7 +135,8 @@ ${sqlHintsPrompt ? `**SQL 生成提示:**${sqlHintsPrompt}` : ""}
 				console.log("systemPrompt: " + systemPrompt);
 
 				const { object: result } = await generateObject({
-					model: openai("gpt-4.1"),
+					// model: openai("gpt-4.1"),
+					model: anthropic("claude-sonnet-4-20250514"),
 					system: systemPrompt,
 					prompt: "请生成 SQL 语句。",
 					schema: SQLGenerationResult,
