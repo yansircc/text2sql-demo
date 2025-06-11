@@ -237,8 +237,8 @@ export const preSQLRouter = createTRPCRouter({
 使用自然语言描述，避免过度技术化的表达。`;
 
 				const { object: preSQL } = await generateObject({
-					// model: openai("gpt-4o"),
-					model: anthropic("claude-sonnet-4-20250514"),
+					model: openai("gpt-4.1"),
+					// model: anthropic("claude-sonnet-4-20250514"),
 					system: systemPrompt,
 					prompt: `请分析这个查询：\n\n"${input.naturalLanguageQuery}"\n\n生成简化的presql分析，特别注意精确选择需要的表和字段。`,
 					schema: PreSQLSchema,
