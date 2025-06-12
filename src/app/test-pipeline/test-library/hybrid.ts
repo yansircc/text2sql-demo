@@ -24,18 +24,18 @@ export const hybrid: QueryTask[] = [
 	},
 	{
 		id: "hybrid-3",
-		text: "美国地区需要企业管理软件的5星级客户",
+		text: "和 ERP 需求有关的的三星以上的日本客户",
 		difficulty: 2,
 		category: "混合搜索",
-		description: "SQL条件：country='US', star=5；语义：企业管理软件",
+		description: "SQL条件：country='US', star=5；语义：ERP软件",
 		tables: ["companies"],
 	},
 	{
 		id: "hybrid-4",
-		text: "有商机金额超过10万美元且需要数字化转型的公司",
+		text: "有商机金额超过10万美元且需要文档管理产品的公司",
 		difficulty: 3,
 		category: "混合搜索",
-		description: "SQL条件：opportunities.amount>100000；语义：数字化转型",
+		description: "SQL条件：opportunities.amount>100000；语义：文档管理产品",
 		tables: ["companies", "opportunities"],
 	},
 	{
@@ -72,11 +72,11 @@ export const hybrid: QueryTask[] = [
 	},
 	{
 		id: "hybrid-9",
-		text: "商机阶段为'谈判中'且需要数据分析平台的客户",
+		text: "商机阶段为'初步接触'且需要数据分析平台的客户",
 		difficulty: 3,
 		category: "混合搜索",
 		description:
-			"SQL条件：opportunities.stageName='谈判中'；语义：数据分析平台",
+			"SQL条件：opportunities.stageName='初步接触'；语义：数据分析平台",
 		tables: ["companies", "opportunities"],
 	},
 	{

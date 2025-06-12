@@ -1,19 +1,29 @@
-import { genSQLRouter } from "@/server/api/routers/gen-sql";
-import { preHandleRouter } from "@/server/api/routers/pre-handle";
-import { preSQLRouter } from "@/server/api/routers/pre-sql";
-import { runSQLRouter } from "@/server/api/routers/run-sql";
+import { qdrantRouter } from "@/server/api/routers/qdrant";
+import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
+import { resultFusionRouter } from "@/server/api/routers/result-fusion";
+import { schemaSelectorRouter } from "@/server/api/routers/schema-selector";
+import { sqlBuilderRouter } from "@/server/api/routers/sql-builder";
+import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
+import { vectorSearchRouter } from "@/server/api/routers/vector-search";
+import { workflowOrchestratorRouter } from "@/server/api/routers/workflow-orchestrator";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
- * This is the primary router for your server.
- *
- * All routers added in /api/routers should be manually added here.
+ * 主路由器 - 新版模块化架构
+ * 适合部署到 CloudFlare Workflow
  */
 export const appRouter = createTRPCRouter({
-	preHandle: preHandleRouter,
-	preSQL: preSQLRouter,
-	genSQL: genSQLRouter,
-	runSQL: runSQLRouter,
+	// 核心模块
+	queryAnalyzer: queryAnalyzerRouter,
+	vectorSearch: vectorSearchRouter,
+	schemaSelector: schemaSelectorRouter,
+	sqlBuilder: sqlBuilderRouter,
+	sqlExecutor: sqlExecutorRouter,
+	resultFusion: resultFusionRouter,
+	workflow: workflowOrchestratorRouter,
+
+	// 辅助功能
+	qdrant: qdrantRouter,
 });
 
 // export type definition of API

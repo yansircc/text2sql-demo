@@ -1,9 +1,27 @@
+export interface WorkflowResult {
+	queryId: string;
+	status: "success" | "partial" | "failed";
+	strategy: "sql_only" | "vector_only" | "hybrid" | "rejected";
+	data?: Array<Record<string, unknown>>;
+	rowCount?: number;
+	metadata?: {
+		totalTime: number;
+		steps: Array<{
+			name: string;
+			status: "success" | "skipped" | "failed";
+			time: number;
+			error?: string;
+		}>;
+		sql?: string;
+		vectorSearchCount?: number;
+		fusionMethod?: string;
+	};
+	error?: string;
+	suggestions?: string[];
+}
+
 export interface PipelineResults {
-	preHandle?: any;
-	preSQL?: any;
-	slimSchema?: any;
-	genSQL?: any;
-	runSQL?: any;
+	workflow?: WorkflowResult;
 }
 
 export interface PipelineStepProps {

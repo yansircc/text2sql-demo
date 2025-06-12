@@ -16,12 +16,11 @@ import {
 // 使用真实的数据库 schema
 export const DatabaseSchema = JSON.stringify(generateJsonSchema());
 
-export const VectorizedDatabaseSchema = JSON.stringify(
-	generateJsonSchema({
-		fieldFilter: FieldFilters.vectorizedOnly,
-		includeEmptyTables: false,
-	}),
-);
+// 动态生成向量化字段的 schema
+export const VectorizedDatabaseSchema = generateJsonSchema({
+	fieldFilter: FieldFilters.vectorizedOnly,
+	includeEmptyTables: false,
+});
 
 // 查询任务接口定义
 export interface QueryTask {
@@ -117,3 +116,54 @@ export const taskStats = {
 		]),
 	),
 };
+
+export const WORKFLOW_STAGES = {
+	INIT: "init",
+	ANALYZING: "analyzing",
+	VECTOR_SEARCH: "vector_search",
+	SCHEMA_SELECTION: "schema_selection",
+	SQL_GENERATION: "sql_generation",
+	SQL_EXECUTION: "sql_execution",
+	RESULT_FUSION: "result_fusion",
+	COMPLETE: "complete",
+	ERROR: "error",
+} as const;
+
+// 将 VectorizedDatabaseSchema 转换为 vectorizedFields 映射格式
+export function getVectorizedFieldsMap(): Record<string, string[]> {
+	const fieldsMap: Record<string, string[]> = {};
+
+	// 遍历所有表
+	for (const [tableName, tableSchema] of Object.entries(
+		VectorizedDatabaseSchema,
+	)) {
+		const vectorizedFields: string[] = [];
+
+		// 遍历表中的所有字段
+		if (tableSchema.properties) {
+			for (const [fieldName, fieldSchema] of Object.entries(
+				tableSchema.properties,
+			)) {
+				// 检查字段是否被向量化
+				if (
+					fieldSchema &&
+					typeof fieldSchema === "object" &&
+					"isVectorized" in fieldSchema &&
+					fieldSchema.isVectorized === true
+				) {
+					vectorizedFields.push(fieldName);
+				}
+			}
+		}
+
+		// 只添加有向量化字段的表
+		if (vectorizedFields.length > 0) {
+			fieldsMap[tableName] = vectorizedFields;
+		}
+	}
+
+	return fieldsMap;
+}
+
+// 导出预计算的向量化字段映射（可选，用于性能优化）
+export const VectorizedFieldsMap = getVectorizedFieldsMap();

@@ -4,57 +4,295 @@ interface ResultDisplayProps {
 	results: PipelineResults;
 }
 
-interface ResultSectionProps {
-	title: string;
-	result: any;
-}
+// 极简的步骤结果展示
+function MinimalStepResult({
+	stepName,
+	data,
+	status,
+}: {
+	stepName: string;
+	data: any;
+	status?: "success" | "error" | "pending";
+}) {
+	const bgColor =
+		status === "error" ? "#fee" : status === "pending" ? "#ffd" : "#efe";
 
-function ResultSection({ title, result }: ResultSectionProps) {
 	return (
-		<div style={{ marginBottom: "20px" }}>
-			<h3>{title}:</h3>
-			<pre
+		<div
+			style={{
+				marginBottom: "12px",
+				padding: "12px",
+				backgroundColor: bgColor,
+				borderRadius: "4px",
+				border: "1px solid #ddd",
+			}}
+		>
+			<div
 				style={{
-					backgroundColor: "#f5f5f5",
-					padding: "10px",
-					overflow: "auto",
-					maxHeight: "400px",
+					fontWeight: "bold",
+					marginBottom: "8px",
+					color: status === "error" ? "#d00" : "#333",
 				}}
 			>
-				{JSON.stringify(result, null, 2)}
-			</pre>
+				{stepName}
+			</div>
+			{data && (
+				<pre
+					style={{
+						margin: 0,
+						fontSize: "12px",
+						fontFamily: "Monaco, monospace",
+						whiteSpace: "pre-wrap",
+						wordBreak: "break-word",
+					}}
+				>
+					{JSON.stringify(data, null, 2)}
+				</pre>
+			)}
 		</div>
 	);
 }
 
 export function ResultDisplay({ results }: ResultDisplayProps) {
-	// 获取语义搜索结果
-	const vectorResult =
-		results.preHandle?.hybridSearch?.vectorResult ||
-		results.preHandle?.vectorSearchResult;
+	if (!results.workflow) {
+		return null;
+	}
 
+	const wf = results.workflow;
+
+	// 错误状态
+	if (wf.status === "failed" && wf.error) {
+		return (
+			<div
+				style={{
+					marginTop: "20px",
+					padding: "16px",
+					backgroundColor: "#ffebee",
+					borderRadius: "8px",
+					border: "1px solid #ef5350",
+				}}
+			>
+				<div
+					style={{ fontWeight: "bold", color: "#c62828", marginBottom: "8px" }}
+				>
+					❌ 查询失败
+				</div>
+				<div style={{ color: "#d32f2f" }}>{wf.error}</div>
+				{wf.suggestions && wf.suggestions.length > 0 && (
+					<div style={{ marginTop: "12px" }}>
+						<div style={{ fontWeight: "600", marginBottom: "4px" }}>建议：</div>
+						<ul style={{ margin: 0, paddingLeft: "20px" }}>
+							{wf.suggestions.map((s, i) => (
+								<li key={i}>{s}</li>
+							))}
+						</ul>
+					</div>
+				)}
+			</div>
+		);
+	}
+
+	// 成功状态
 	return (
-		<div>
-			{results.preHandle && (
-				<ResultSection title="Pre-Handle 结果" result={results.preHandle} />
+		<div style={{ marginTop: "20px" }}>
+			{/* 概览信息 */}
+			<div
+				style={{
+					marginBottom: "16px",
+					padding: "12px",
+					backgroundColor: "#f5f5f5",
+					borderRadius: "6px",
+					fontSize: "14px",
+				}}
+			>
+				<div
+					style={{
+						display: "grid",
+						gridTemplateColumns: "auto 1fr",
+						gap: "8px",
+					}}
+				>
+					<strong>查询ID:</strong>{" "}
+					<span style={{ fontFamily: "monospace", fontSize: "12px" }}>
+						{wf.queryId}
+					</span>
+					<strong>策略:</strong>{" "}
+					<span>
+						{wf.strategy === "sql_only"
+							? "SQL查询"
+							: wf.strategy === "vector_only"
+								? "向量搜索"
+								: wf.strategy === "hybrid"
+									? "混合搜索"
+									: "已拒绝"}
+					</span>
+					<strong>状态:</strong>{" "}
+					<span
+						style={{ color: wf.status === "success" ? "#4caf50" : "#ff9800" }}
+					>
+						{wf.status === "success"
+							? "成功"
+							: wf.status === "partial"
+								? "部分成功"
+								: "失败"}
+					</span>
+					<strong>总耗时:</strong> <span>{wf.metadata?.totalTime || 0}ms</span>
+				</div>
+			</div>
+
+			{/* 执行步骤 */}
+			{wf.metadata?.steps && wf.metadata.steps.length > 0 && (
+				<div style={{ marginBottom: "16px" }}>
+					<h3 style={{ fontSize: "16px", marginBottom: "12px" }}>执行步骤</h3>
+					<div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+						{wf.metadata.steps.map((step, idx) => (
+							<div
+								key={idx}
+								style={{
+									padding: "8px 12px",
+									backgroundColor:
+										step.status === "success"
+											? "#e8f5e9"
+											: step.status === "failed"
+												? "#ffebee"
+												: "#fff3e0",
+									borderRadius: "4px",
+									fontSize: "13px",
+									border: `1px solid ${step.status === "success" ? "#4caf50" : step.status === "failed" ? "#f44336" : "#ff9800"}`,
+								}}
+							>
+								<div style={{ fontWeight: "600" }}>{step.name}</div>
+								<div
+									style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}
+								>
+									{step.time}ms
+								</div>
+								{step.error && (
+									<div
+										style={{
+											fontSize: "11px",
+											color: "#d32f2f",
+											marginTop: "2px",
+										}}
+									>
+										{step.error}
+									</div>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
 			)}
 
-			{/* 如果有语义搜索结果，单独展示 */}
-			{vectorResult && (
-				<ResultSection title="语义搜索结果" result={vectorResult} />
+			{/* SQL语句 */}
+			{wf.metadata?.sql && (
+				<MinimalStepResult
+					stepName="生成的SQL"
+					data={wf.metadata.sql}
+					status="success"
+				/>
 			)}
 
-			{results.preSQL && (
-				<ResultSection title="Pre-SQL 结果" result={results.preSQL} />
+			{/* 查询结果 */}
+			{wf.data && wf.data.length > 0 && (
+				<div>
+					<h3 style={{ fontSize: "16px", marginBottom: "12px" }}>
+						查询结果 ({wf.rowCount || wf.data.length} 条记录)
+					</h3>
+					<div
+						style={{
+							backgroundColor: "#fff",
+							border: "1px solid #ddd",
+							borderRadius: "4px",
+							overflow: "auto",
+							maxHeight: "400px",
+						}}
+					>
+						<table
+							style={{
+								width: "100%",
+								borderCollapse: "collapse",
+								fontSize: "13px",
+							}}
+						>
+							<thead>
+								<tr style={{ backgroundColor: "#f5f5f5" }}>
+									{wf.data[0] &&
+										Object.keys(wf.data[0]).map((key) => (
+											<th
+												key={key}
+												style={{
+													padding: "8px",
+													borderBottom: "2px solid #ddd",
+													textAlign: "left",
+													position: "sticky",
+													top: 0,
+													backgroundColor: "#f5f5f5",
+												}}
+											>
+												{key}
+											</th>
+										))}
+								</tr>
+							</thead>
+							<tbody>
+								{wf.data.slice(0, 50).map((row, idx) => (
+									<tr
+										key={idx}
+										style={{
+											backgroundColor: idx % 2 === 0 ? "#fff" : "#fafafa",
+										}}
+									>
+										{Object.values(row).map((value, vIdx) => (
+											<td
+												key={vIdx}
+												style={{
+													padding: "8px",
+													borderBottom: "1px solid #eee",
+												}}
+											>
+												{typeof value === "object"
+													? JSON.stringify(value)
+													: String(value)}
+											</td>
+										))}
+									</tr>
+								))}
+							</tbody>
+						</table>
+						{wf.data.length > 50 && (
+							<div
+								style={{
+									padding: "8px",
+									textAlign: "center",
+									backgroundColor: "#f5f5f5",
+									borderTop: "1px solid #ddd",
+									fontSize: "12px",
+									color: "#666",
+								}}
+							>
+								仅显示前 50 条记录
+							</div>
+						)}
+					</div>
+				</div>
 			)}
-			{results.slimSchema && (
-				<ResultSection title="Slim Schema 结果" result={results.slimSchema} />
-			)}
-			{results.genSQL && (
-				<ResultSection title="Gen SQL 结果" result={results.genSQL} />
-			)}
-			{results.runSQL && (
-				<ResultSection title="Run SQL 结果" result={results.runSQL} />
+
+			{/* 向量搜索统计 */}
+			{wf.metadata?.vectorSearchCount !== undefined && (
+				<div
+					style={{
+						marginTop: "12px",
+						padding: "8px",
+						backgroundColor: "#f5f5f5",
+						borderRadius: "4px",
+						fontSize: "13px",
+					}}
+				>
+					向量搜索找到 {wf.metadata.vectorSearchCount} 个相关结果
+					{wf.metadata.fusionMethod &&
+						` (使用 ${wf.metadata.fusionMethod.toUpperCase()} 融合算法)`}
+				</div>
 			)}
 		</div>
 	);
