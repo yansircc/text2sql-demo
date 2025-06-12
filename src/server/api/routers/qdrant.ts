@@ -1,9 +1,8 @@
 import {
 	collectionConfigSchema,
-	hybridSearchOptionsSchema,
-	namedVectorSearchOptionsSchema,
 	payloadIndexSchema,
 	pointDataSchema,
+	vectorSearchOptionsSchema,
 } from "@/lib/qdrant/schema";
 import { qdrantService } from "@/lib/qdrant/service";
 import { z } from "zod";
@@ -133,26 +132,23 @@ export const qdrantRouter = createTRPCRouter({
 			);
 		}),
 
-	// Search operations - Named Vectors only
-	searchNamedVector: publicProcedure
+	// Search operations - 专注于Named Vector搜索
+	search: publicProcedure
 		.input(
 			z.object({
 				collectionName: z.string(),
-				options: namedVectorSearchOptionsSchema,
+				options: vectorSearchOptionsSchema,
 			}),
 		)
 		.query(async ({ input }) => {
-			return await qdrantService.searchNamedVector(
-				input.collectionName,
-				input.options,
-			);
+			return await qdrantService.search(input.collectionName, input.options);
 		}),
 
 	searchBatch: publicProcedure
 		.input(
 			z.object({
 				collectionName: z.string(),
-				searches: z.array(namedVectorSearchOptionsSchema),
+				searches: z.array(vectorSearchOptionsSchema),
 			}),
 		)
 		.query(async ({ input }) => {
@@ -160,17 +156,5 @@ export const qdrantRouter = createTRPCRouter({
 				input.collectionName,
 				input.searches,
 			);
-		}),
-
-	// 混合搜索 - 支持多个命名向量
-	hybridSearch: publicProcedure
-		.input(hybridSearchOptionsSchema)
-		.mutation(async ({ input }) => {
-			try {
-				return await qdrantService.hybridSearch(input);
-			} catch (error) {
-				console.error("Hybrid search error:", error);
-				throw error;
-			}
 		}),
 });

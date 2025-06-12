@@ -53,18 +53,117 @@ export const tableInfo = {
 	},
 } as const;
 
+// 字段过滤器类型定义
+export type FieldFilter = (fieldName: string, fieldSchema: any) => boolean;
+
+// 预定义的常用过滤器
+export const FieldFilters = {
+	// 只包含向量化字段
+	vectorizedOnly: (fieldSchema: any) => {
+		return (
+			typeof fieldSchema === "object" &&
+			fieldSchema !== null &&
+			"isVectorized" in fieldSchema &&
+			fieldSchema.isVectorized === true
+		);
+	},
+
+	// 只包含必填字段
+	requiredOnly: (fieldSchema: any) => {
+		return fieldSchema?.required === true;
+	},
+
+	// 只包含字符串类型字段
+	stringOnly: (fieldSchema: any) => {
+		return fieldSchema?.type === "string";
+	},
+
+	// 只包含数字类型字段
+	numberOnly: (fieldSchema: any) => {
+		return fieldSchema?.type === "number";
+	},
+
+	// 根据字段名模式过滤
+	byNamePattern: (pattern: RegExp) => (fieldName: string) => {
+		return pattern.test(fieldName);
+	},
+
+	// 根据描述关键词过滤
+	byDescription: (keywords: string[]) => (fieldSchema: any) => {
+		const description = fieldSchema?.description?.toLowerCase() || "";
+		return keywords.some((keyword) =>
+			description.includes(keyword.toLowerCase()),
+		);
+	},
+
+	// 组合过滤器 - AND 逻辑
+	and:
+		(...filters: FieldFilter[]) =>
+		(fieldName: string, fieldSchema: any) => {
+			return filters.every((filter) => filter(fieldName, fieldSchema));
+		},
+
+	// 组合过滤器 - OR 逻辑
+	or:
+		(...filters: FieldFilter[]) =>
+		(fieldName: string, fieldSchema: any) => {
+			return filters.some((filter) => filter(fieldName, fieldSchema));
+		},
+
+	// 组合过滤器 - NOT 逻辑
+	not: (filter: FieldFilter) => (fieldName: string, fieldSchema: any) => {
+		return !filter(fieldName, fieldSchema);
+	},
+};
+
 // 生成 JSON Schema 的工具函数 - 包含表描述信息
-export function generateJsonSchema() {
+export function generateJsonSchema(options?: {
+	fieldFilter?: FieldFilter;
+	includeEmptyTables?: boolean;
+}) {
+	const { fieldFilter, includeEmptyTables = true } = options || {};
 	const schema: Record<string, any> = {};
 
 	for (const [key, tableData] of Object.entries(tableInfo)) {
 		const jsonSchema = z.toJSONSchema(tableData.schema);
-		// 使用实际的数据库表名作为键，而不是 tableInfo 的键
-		schema[tableData.name] = {
+
+		let finalSchema = {
 			...jsonSchema,
 			title: tableData.name,
 			description: tableData.description,
 		};
+
+		// 如果有字段过滤器，应用过滤逻辑
+		if (fieldFilter && jsonSchema.properties) {
+			const filteredProperties: Record<string, any> = {};
+			const filteredRequired: string[] = [];
+
+			for (const [fieldName, fieldSchema] of Object.entries(
+				jsonSchema.properties,
+			)) {
+				if (fieldFilter(fieldName, fieldSchema)) {
+					filteredProperties[fieldName] = fieldSchema;
+					// 如果原来是必填字段，在过滤后的 schema 中也保持必填
+					if (jsonSchema.required && jsonSchema.required.includes(fieldName)) {
+						filteredRequired.push(fieldName);
+					}
+				}
+			}
+
+			// 根据配置决定是否包含空表
+			if (Object.keys(filteredProperties).length > 0 || includeEmptyTables) {
+				finalSchema = {
+					...finalSchema,
+					properties: filteredProperties,
+					required: filteredRequired,
+				};
+				// 使用实际的数据库表名作为键，而不是 tableInfo 的键
+				schema[tableData.name] = finalSchema;
+			}
+		} else {
+			// 无过滤器模式，添加所有表
+			schema[tableData.name] = finalSchema;
+		}
 	}
 
 	return schema;

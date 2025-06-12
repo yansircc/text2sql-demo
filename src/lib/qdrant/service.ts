@@ -1,13 +1,10 @@
 import { QdrantClient } from "@qdrant/qdrant-js";
 import { env } from "../../env";
-import { embedText } from "../embed-text";
 import type {
 	CollectionConfig,
-	HybridSearchOptions,
-	HybridSearchResult,
-	NamedVectorSearchOptions,
 	PayloadIndexOptions,
 	PointData,
+	VectorSearchOptions,
 } from "./schema";
 
 class QdrantService {
@@ -138,10 +135,13 @@ class QdrantService {
 		}
 	}
 
-	// Search operations - 只支持 Named Vector 搜索
-	async searchNamedVector(
+	// Search operations - 专注于 Named Vector 搜索
+	async search(
 		collectionName: string,
-		options: NamedVectorSearchOptions,
+		options: VectorSearchOptions & {
+			oversampling?: number;
+			rescore?: boolean;
+		},
 	) {
 		try {
 			const searchOptions = {
@@ -153,33 +153,107 @@ class QdrantService {
 				filter: options.filter,
 				with_payload: options.withPayload,
 				with_vectors: options.withVectors,
+				params: {
+					hnsw_ef: options.hnswEf || 128,
+					exact: options.exact || false,
+					// 2025年最佳实践：默认启用量化优化
+					quantization: {
+						rescore: options.rescore !== false, // 默认启用重新评分
+						oversampling: options.oversampling || 2.0, // 默认2倍过采样
+					},
+				},
 			};
 
 			return await this.client.search(collectionName, searchOptions as any);
 		} catch (error) {
-			console.error(
-				`Error searching named vector in ${collectionName}:`,
-				error,
-			);
+			console.error(`Error searching in ${collectionName}:`, error);
 			throw error;
 		}
 	}
 
+	// 2025年最佳实践：智能批量搜索（推荐使用）
 	async searchBatch(
 		collectionName: string,
-		searches: NamedVectorSearchOptions[],
+		searches: VectorSearchOptions[],
+		options?: {
+			optimizeFor?: "speed" | "accuracy" | "balanced";
+			adaptiveEf?: boolean; // 自适应ef值
+			useQuantization?: boolean;
+		},
 	) {
 		try {
-			const batchSearches = searches.map((search) => ({
-				vector: {
-					name: search.vectorName,
-					vector: search.vector,
-				},
-				limit: search.limit,
-				filter: search.filter,
-				with_payload: search.withPayload,
-				with_vectors: search.withVectors,
-			}));
+			const opts = {
+				optimizeFor: "balanced" as const,
+				adaptiveEf: true,
+				useQuantization: true,
+				...options,
+			};
+
+			// 2025年最佳实践：根据优化目标自动调整参数
+			const getOptimalParams = (searchType: typeof opts.optimizeFor) => {
+				switch (searchType) {
+					case "speed":
+						return {
+							hnsw_ef: 64,
+							oversampling: 1.5,
+							rescore: false,
+						};
+					case "accuracy":
+						return {
+							hnsw_ef: 512,
+							oversampling: 4.0,
+							rescore: true,
+						};
+					default:
+						return {
+							hnsw_ef: 128,
+							oversampling: 2.0,
+							rescore: true,
+						};
+				}
+			};
+
+			const optimalParams = getOptimalParams(opts.optimizeFor);
+
+			const batchSearches = searches.map((search) => {
+				// 2025年最佳实践：自适应ef值（基于搜索复杂度）
+				let adaptiveEf = optimalParams.hnsw_ef;
+				if (opts.adaptiveEf) {
+					// 根据filter复杂度和limit调整ef值
+					const filterComplexity = search.filter
+						? Object.keys(search.filter).length
+						: 0;
+					const limitFactor = Math.min(search.limit / 10, 2);
+					adaptiveEf = Math.min(
+						optimalParams.hnsw_ef * (1 + filterComplexity * 0.2) * limitFactor,
+						1024,
+					);
+				}
+
+				return {
+					vector: {
+						name: search.vectorName,
+						vector: search.vector,
+					},
+					limit: search.limit,
+					filter: search.filter,
+					with_payload: search.withPayload,
+					with_vectors: search.withVectors,
+					params: {
+						hnsw_ef: Math.round(adaptiveEf),
+						exact: search.exact || false,
+						// 2025年最佳实践：智能量化配置
+						...(opts.useQuantization && !search.exact
+							? {
+									quantization: {
+										rescore: optimalParams.rescore,
+										oversampling: optimalParams.oversampling,
+									},
+								}
+							: {}),
+					},
+				};
+			});
 
 			return await this.client.searchBatch(collectionName, {
 				searches: batchSearches as any,
@@ -190,296 +264,9 @@ class QdrantService {
 		}
 	}
 
-	// 混合搜索 - 支持多个命名向量
-	async hybridSearch(options: HybridSearchOptions) {
-		const {
-			collectionName,
-			query,
-			vectorNames,
-			limit,
-			scoreNormalization,
-			candidateMultiplier,
-			filter,
-			keywordFields,
-			useShould,
-		} = options;
-
-		try {
-			// 计算候选结果数量
-			const candidateLimit = limit * candidateMultiplier;
-
-			// 1. 生成查询嵌入
-			const embedding = await embedText(query);
-
-			if (!embedding) {
-				throw new Error("Failed to generate query embedding");
-			}
-
-			// 2. 执行混合搜索
-			const allResults: HybridSearchResult[] = [];
-
-			// 2.1 向量搜索 - 对每个命名向量进行搜索
-			const vectorSearchPromises = vectorNames.map(async (vectorName) => {
-				// 构建向量搜索的过滤器
-				let vectorFilter: Record<string, unknown> = {};
-				if (filter && Object.keys(filter).length > 0) {
-					if (useShould) {
-						// 使用should逻辑(OR) - 任意过滤条件匹配即可
-						vectorFilter = {
-							should: Object.entries(filter).map(([key, value]) => ({
-								key,
-								match: { value },
-							})),
-						};
-					} else {
-						// 使用must逻辑(AND) - 所有过滤条件都必须匹配
-						vectorFilter = {
-							must: Object.entries(filter).map(([key, value]) => ({
-								key,
-								match: { value },
-							})),
-						};
-					}
-				}
-
-				const results = await this.searchNamedVector(collectionName, {
-					vectorName,
-					vector: embedding,
-					limit: candidateLimit,
-					filter: vectorFilter,
-					withPayload: true,
-					withVectors: false,
-				});
-
-				return { vectorName, results };
-			});
-
-			const vectorSearchResults = await Promise.all(vectorSearchPromises);
-
-			// 处理向量搜索结果
-			for (const { vectorName, results } of vectorSearchResults) {
-				if (results && results.length > 0) {
-					const formattedResults = results.map((r, index) => ({
-						id: String(r.id),
-						score: r.score || 0,
-						payload: r.payload as { text: string; [key: string]: unknown },
-						metadata: {
-							source: "vector" as const,
-							originalScore: r.score,
-							vector_rank: index,
-							keyword_rank: -1,
-							vectorName,
-						},
-					}));
-
-					allResults.push(...formattedResults);
-				}
-			}
-
-			// 2.2 关键词搜索 - 在指定字段中精确匹配
-			const keywordSearchPromises = keywordFields.flatMap((field) =>
-				vectorNames.map(async (vectorName) => {
-					let keywordFilter: Record<string, unknown>;
-
-					if (filter && Object.keys(filter).length > 0) {
-						if (useShould) {
-							// 使用should逻辑 - 原有过滤条件作为should，关键词搜索作为must
-							keywordFilter = {
-								must: [
-									{
-										key: field,
-										match: { text: query },
-									},
-								],
-								should: Object.entries(filter).map(([key, value]) => ({
-									key,
-									match: { value },
-								})),
-							};
-						} else {
-							// 使用must逻辑 - 所有条件都必须匹配
-							keywordFilter = {
-								must: [
-									...Object.entries(filter).map(([key, value]) => ({
-										key,
-										match: { value },
-									})),
-									{
-										key: field,
-										match: { text: query },
-									},
-								],
-							};
-						}
-					} else {
-						// 没有额外过滤条件，只搜索关键词字段
-						keywordFilter = {
-							must: [
-								{
-									key: field,
-									match: { text: query },
-								},
-							],
-						};
-					}
-
-					const results = await this.searchNamedVector(collectionName, {
-						vectorName,
-						vector: embedding,
-						limit: candidateLimit,
-						filter: keywordFilter,
-						withPayload: true,
-						withVectors: false,
-					});
-
-					return { vectorName, field, results };
-				}),
-			);
-
-			const keywordSearchResults = await Promise.all(keywordSearchPromises);
-			const keywordResults = keywordSearchResults.flatMap(
-				({ vectorName, results }) =>
-					results.map((r, index) => ({
-						id: String(r.id),
-						score: r.score || 0,
-						payload: r.payload as { text: string; [key: string]: unknown },
-						vectorName,
-						keyword_rank: index,
-					})),
-			);
-
-			// 处理关键词搜索结果
-			if (keywordResults && keywordResults.length > 0) {
-				// 去重并合并结果
-				const existingIds = new Set(allResults.map((r) => r.id));
-
-				for (const r of keywordResults) {
-					// 如果ID已存在，只更新元数据
-					if (existingIds.has(r.id)) {
-						for (const existingResult of allResults) {
-							if (existingResult.id === r.id && existingResult.metadata) {
-								existingResult.metadata.keyword_rank = r.keyword_rank;
-								break;
-							}
-						}
-					} else {
-						// 创建新的结果项
-						allResults.push({
-							id: r.id,
-							score: r.score,
-							payload: r.payload,
-							metadata: {
-								source: "keyword" as const,
-								originalScore: r.score,
-								vector_rank: -1,
-								keyword_rank: r.keyword_rank,
-								vectorName: r.vectorName,
-							},
-						});
-					}
-				}
-			}
-
-			// 3. 应用Reciprocal Rank Fusion (RRF)来合并结果
-			const idToResultMap = new Map();
-			const k = 20; // RRF参数k
-
-			// 处理向量搜索排名
-			for (const result of allResults) {
-				if (result.metadata.vector_rank >= 0) {
-					const rrf_score = 1 / (k + result.metadata.vector_rank);
-
-					if (!idToResultMap.has(result.id)) {
-						idToResultMap.set(result.id, {
-							...result,
-							rrf_score,
-						});
-					} else {
-						const existing = idToResultMap.get(result.id);
-						existing.rrf_score = (existing.rrf_score || 0) + rrf_score;
-					}
-				}
-			}
-
-			// 处理关键词搜索排名
-			for (const result of allResults) {
-				if (result.metadata.keyword_rank >= 0) {
-					const rrf_score = 1 / (k + result.metadata.keyword_rank);
-
-					if (!idToResultMap.has(result.id)) {
-						idToResultMap.set(result.id, {
-							...result,
-							rrf_score,
-						});
-					} else {
-						const existing = idToResultMap.get(result.id);
-						existing.rrf_score = (existing.rrf_score || 0) + rrf_score;
-					}
-				}
-			}
-
-			// 4. 排序并归一化
-			let fusedResults = Array.from(idToResultMap.values()).sort(
-				(a, b) => (b.rrf_score || 0) - (a.rrf_score || 0),
-			);
-
-			// 归一化分数
-			if (fusedResults.length > 0) {
-				const maxScore = fusedResults[0].rrf_score;
-				const minScore = fusedResults[fusedResults.length - 1].rrf_score;
-				const scoreRange = maxScore - minScore;
-
-				fusedResults = fusedResults.map((result) => {
-					let normalizedScore: number;
-
-					switch (scoreNormalization) {
-						case "percentage":
-							normalizedScore =
-								scoreRange > 0
-									? (result.rrf_score - minScore) / scoreRange
-									: 1.0;
-							normalizedScore = Math.round(normalizedScore * 100) / 100;
-							break;
-						case "exponential":
-							normalizedScore = (result.rrf_score / maxScore) ** 0.5;
-							normalizedScore = Math.round(normalizedScore * 100) / 100;
-							break;
-						default:
-							normalizedScore = result.rrf_score;
-					}
-
-					return {
-						...result,
-						score: normalizedScore,
-						metadata: {
-							...result.metadata,
-							raw_rrf_score: result.rrf_score,
-						},
-					};
-				});
-			}
-
-			// 5. 返回最终结果
-			return {
-				results: fusedResults.slice(0, limit),
-				fusionDetails: {
-					totalResults: fusedResults.length,
-					returnedResults: Math.min(fusedResults.length, limit),
-					vectorResultsCount: vectorSearchResults.reduce(
-						(sum, { results }) => sum + results.length,
-						0,
-					),
-					keywordResultsCount: keywordResults.length,
-					normalizationMethod: scoreNormalization,
-					searchedFields: keywordFields,
-					searchedVectors: vectorNames,
-					appliedFilter: filter,
-				},
-			};
-		} catch (error) {
-			console.error("Hybrid search error:", error);
-			throw error;
-		}
+	// 获取客户端实例（用于测试）
+	public getClient() {
+		return this.client;
 	}
 }
 

@@ -1,6 +1,6 @@
 import { api } from "@/trpc/react";
 import { useState } from "react";
-import { mockDatabaseSchema } from "./constants";
+import { DatabaseSchema, VectorizedDatabaseSchema } from "./constants";
 import type { PipelineResults } from "./types";
 
 export function usePipeline() {
@@ -19,7 +19,8 @@ export function usePipeline() {
 		try {
 			const result = await preHandleMutation.mutateAsync({
 				query,
-				databaseSchema: mockDatabaseSchema,
+				databaseSchema: DatabaseSchema,
+				vectorizedDatabaseSchema: VectorizedDatabaseSchema,
 			});
 			setResults((prev) => ({ ...prev, preHandle: result }));
 		} catch (error) {
@@ -47,7 +48,7 @@ export function usePipeline() {
 
 			const result = await preSQLMutation.mutateAsync({
 				naturalLanguageQuery: query,
-				databaseSchema: mockDatabaseSchema,
+				databaseSchema: DatabaseSchema,
 				preHandleInfo,
 			});
 			setResults((prev) => ({ ...prev, preSQL: result }));
@@ -67,7 +68,7 @@ export function usePipeline() {
 
 			const result = await slimSchemaMutation.mutateAsync({
 				selectedTables: preSQLResult.selectedTables,
-				fullDatabaseSchema: mockDatabaseSchema,
+				fullDatabaseSchema: DatabaseSchema,
 			});
 			setResults((prev) => ({ ...prev, slimSchema: result }));
 		} catch (error) {
@@ -133,7 +134,7 @@ export function usePipeline() {
 			// Step 1: Pre-Handle
 			const preHandleResult = await preHandleMutation.mutateAsync({
 				query,
-				databaseSchema: mockDatabaseSchema,
+				databaseSchema: DatabaseSchema,
 			});
 			setResults((prev) => ({ ...prev, preHandle: preHandleResult }));
 
@@ -148,19 +149,13 @@ export function usePipeline() {
 
 			// Step 2: Pre-SQL
 			const preHandleInfo = JSON.stringify({
-				semanticSearchResults: preHandleResult.result.semanticSearch
-					.needsSemanticSearch
-					? "[假设的语义搜索结果]"
-					: null,
-				selectedTables: preHandleResult.result.tableAnalysis.tables
-					.filter((t: any) => t.confidence > 0.5)
-					.map((t: any) => t.tableName),
-				hasJoins: preHandleResult.result.tableAnalysis.hasJoins,
+				selectedTables:
+					preHandleResult.result.searchRequirement.databaseQuery?.tables,
 			});
 
 			const preSQLResult = await preSQLMutation.mutateAsync({
 				naturalLanguageQuery: query,
-				databaseSchema: mockDatabaseSchema,
+				databaseSchema: DatabaseSchema,
 				preHandleInfo,
 			});
 			setResults((prev) => ({ ...prev, preSQL: preSQLResult }));
@@ -168,7 +163,7 @@ export function usePipeline() {
 			// Step 3: Slim Schema
 			const slimSchemaResult = await slimSchemaMutation.mutateAsync({
 				selectedTables: preSQLResult.preSQL.selectedTables,
-				fullDatabaseSchema: mockDatabaseSchema,
+				fullDatabaseSchema: DatabaseSchema,
 			});
 			setResults((prev) => ({ ...prev, slimSchema: slimSchemaResult }));
 

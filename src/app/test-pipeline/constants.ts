@@ -1,11 +1,15 @@
-import { generateJsonSchema } from "@/types/db.schema";
+import { FieldFilters, generateJsonSchema } from "@/types/db.schema";
 import { lv1, lv2, lv3, lv4, lv5, lv6, lv7 } from "./test-library";
 
 // 使用真实的数据库 schema
-export const realDatabaseSchema = JSON.stringify(generateJsonSchema());
+export const DatabaseSchema = JSON.stringify(generateJsonSchema());
 
-// 为了兼容性，保留 mockDatabaseSchema 的名称，但使用真实数据
-export const mockDatabaseSchema = realDatabaseSchema;
+export const VectorizedDatabaseSchema = JSON.stringify(
+	generateJsonSchema({
+		fieldFilter: FieldFilters.vectorizedOnly,
+		includeEmptyTables: false,
+	}),
+);
 
 // 查询任务接口定义
 export interface QueryTask {

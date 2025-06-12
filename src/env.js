@@ -15,6 +15,7 @@ export const env = createEnv({
 		QDRANT_DEFAULT_COLLECTION: z
 			.string()
 			.min(1, "Qdrant default cluster is required"),
+		EMBEDDING_MODEL: z.string().min(1, "Embedding model is required"),
 		EMBEDDING_DIMENSION: z.preprocess(
 			(val) => Number(val),
 			z.number().int().min(1, "Embedding dimension is required"),
@@ -44,6 +45,7 @@ export const env = createEnv({
 		QDRANT_URL: process.env.QDRANT_URL,
 		QDRANT_API_KEY: process.env.QDRANT_API_KEY,
 		QDRANT_DEFAULT_COLLECTION: process.env.QDRANT_DEFAULT_COLLECTION,
+		EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
 		EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION,
 		NODE_ENV: process.env.NODE_ENV,
 		// NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,

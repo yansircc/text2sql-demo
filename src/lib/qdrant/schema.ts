@@ -33,71 +33,29 @@ const payloadIndexSchema = z.object({
 });
 type PayloadIndexOptions = z.infer<typeof payloadIndexSchema>;
 
-// 搜索选项
-const namedVectorSearchOptionsSchema = z.object({
+// 2025年最佳实践：带量化的搜索选项
+const vectorSearchOptionsSchema = z.object({
 	vectorName: z.string(),
 	vector: z.array(z.number()),
 	limit: z.number().optional().default(10),
 	filter: z.record(z.unknown()).optional(),
 	withPayload: z.boolean().optional().default(true),
 	withVectors: z.boolean().optional().default(false),
+	hnswEf: z.number().optional(),
+	exact: z.boolean().optional(),
+	// 量化特定参数
+	oversampling: z.number().optional(), // 过采样倍数
+	rescore: z.boolean().optional(), // 是否重新评分
 });
-type NamedVectorSearchOptions = z.infer<typeof namedVectorSearchOptionsSchema>;
-
-// 混合搜索选项
-const hybridSearchOptionsSchema = z.object({
-	collectionName: z.string(),
-	query: z.string(),
-	vectorNames: z.array(z.string()).optional().default(["text"]), // 支持多个向量名称
-	limit: z.number().optional().default(10),
-	scoreNormalization: z
-		.enum(["none", "percentage", "exponential"])
-		.optional()
-		.default("percentage"),
-	candidateMultiplier: z.number().optional().default(2),
-
-	// 通用过滤器 - 支持任意字段组合
-	filter: z.record(z.unknown()).optional(),
-
-	// 关键词搜索的目标字段 - 支持多个字段
-	keywordFields: z.array(z.string()).optional().default(["text"]),
-
-	// 是否使用should逻辑（OR）还是must逻辑（AND）
-	useShould: z.boolean().optional().default(false),
-});
-type HybridSearchOptions = z.infer<typeof hybridSearchOptionsSchema>;
-
-const hybridSearchResultSchema = z.object({
-	id: z.string(),
-	score: z.number(),
-	payload: z
-		.object({
-			text: z.string(),
-		})
-		.catchall(z.unknown()),
-	metadata: z.object({
-		source: z.enum(["vector", "keyword"]),
-		originalScore: z.number().optional(),
-		vector_rank: z.number(),
-		keyword_rank: z.number(),
-		raw_rrf_score: z.number().optional(),
-		vectorName: z.string().optional(), // 添加向量名称信息
-	}),
-	rrf_score: z.number().optional(),
-});
-type HybridSearchResult = z.infer<typeof hybridSearchResultSchema>;
+type VectorSearchOptions = z.infer<typeof vectorSearchOptionsSchema>;
 
 export {
 	pointDataSchema,
 	collectionConfigSchema,
 	payloadIndexSchema,
-	namedVectorSearchOptionsSchema,
-	hybridSearchOptionsSchema,
-	hybridSearchResultSchema,
+	vectorSearchOptionsSchema,
 	type PointData,
 	type CollectionConfig,
 	type PayloadIndexOptions,
-	type NamedVectorSearchOptions,
-	type HybridSearchOptions,
-	type HybridSearchResult,
+	type VectorSearchOptions,
 };
