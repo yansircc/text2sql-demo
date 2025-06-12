@@ -10,6 +10,15 @@ export const env = createEnv({
 		DATABASE_URL: z.string().url(),
 		AIHUBMIX_API_KEY: z.string().min(1, "AIHubMix API key is required"),
 		AIHUBMIX_BASE_URL: z.string().url(),
+		QDRANT_URL: z.string().url(),
+		QDRANT_API_KEY: z.string().min(1, "Qdrant API key is required"),
+		QDRANT_DEFAULT_COLLECTION: z
+			.string()
+			.min(1, "Qdrant default cluster is required"),
+		EMBEDDING_DIMENSION: z.preprocess(
+			(val) => Number(val),
+			z.number().int().min(1, "Embedding dimension is required"),
+		),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
@@ -32,6 +41,10 @@ export const env = createEnv({
 		DATABASE_URL: process.env.DATABASE_URL,
 		AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
 		AIHUBMIX_BASE_URL: process.env.AIHUBMIX_BASE_URL,
+		QDRANT_URL: process.env.QDRANT_URL,
+		QDRANT_API_KEY: process.env.QDRANT_API_KEY,
+		QDRANT_DEFAULT_COLLECTION: process.env.QDRANT_DEFAULT_COLLECTION,
+		EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION,
 		NODE_ENV: process.env.NODE_ENV,
 		// NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
 	},

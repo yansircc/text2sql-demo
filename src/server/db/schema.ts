@@ -2,13 +2,7 @@
 // https://orm.drizzle.team/docs/sql-schema-declaration
 
 import { sql } from "drizzle-orm";
-import {
-	index,
-	integer,
-	real,
-	sqliteTableCreator,
-	text,
-} from "drizzle-orm/sqlite-core";
+import { index, sqliteTableCreator } from "drizzle-orm/sqlite-core";
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -67,6 +61,7 @@ export const companies = createTable(
 		index("companies_is_private_idx").on(t.isPrivate),
 	],
 );
+export type Company = typeof companies.$inferSelect;
 
 /**
  * 2. 联系人表 (contacts)
