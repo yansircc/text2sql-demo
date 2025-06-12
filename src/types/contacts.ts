@@ -10,6 +10,9 @@ export const contactsSchema = z
 			.string()
 			.max(200)
 			.describe("联系人姓名，如'刘总监'、'陈经理'")
+			.meta({
+				isVectorized: true,
+			})
 			.default(""),
 		email: z
 			.string()
@@ -48,6 +51,9 @@ export const contactsSchema = z
 		remark: z
 			.string()
 			.describe("联系人备注，如'技术决策人，对AI很感兴趣'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		createdAt: z
 			.number()

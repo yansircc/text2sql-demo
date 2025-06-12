@@ -14,32 +14,6 @@ interface ShowResultsProps {
 }
 
 export function ShowResults({ results }: ShowResultsProps) {
-	function getDifficultyColor(difficulty: string) {
-		switch (difficulty) {
-			case "simple":
-				return "bg-green-50 text-green-700";
-			case "medium":
-				return "bg-yellow-50 text-yellow-700";
-			case "hard":
-				return "bg-red-50 text-red-700";
-			default:
-				return "bg-gray-50 text-gray-700";
-		}
-	}
-
-	function getConfidenceColor(confidence: string) {
-		switch (confidence) {
-			case "high":
-				return "bg-green-50 text-green-700";
-			case "medium":
-				return "bg-yellow-50 text-yellow-700";
-			case "low":
-				return "bg-red-50 text-red-700";
-			default:
-				return "bg-gray-50 text-gray-700";
-		}
-	}
-
 	return (
 		<div className="rounded-lg bg-white p-6 shadow-lg">
 			<h2 className="mb-4 font-semibold text-gray-800 text-xl">
@@ -66,7 +40,7 @@ export function ShowResults({ results }: ShowResultsProps) {
 						{/* PreSQL 结果 */}
 						<div>
 							<h4 className="mb-3 font-medium text-gray-800">
-								📄 生成的 PreSQL (v2.1 - 智能表字段选择)
+								📄 生成的 PreSQL (v3.0 - 2025最佳实践)
 							</h4>
 							{result.preSQL.error ? (
 								<div className="rounded bg-red-50 p-3 text-red-800">
@@ -75,29 +49,24 @@ export function ShowResults({ results }: ShowResultsProps) {
 							) : (
 								<div className="space-y-4">
 									{/* 核心信息摘要 */}
-									<div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-										<div
-											className={`rounded p-3 ${getDifficultyColor(result.preSQL.difficulty)}`}
-										>
-											<div className="font-medium">难易程度</div>
+									<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+										<div className="rounded bg-blue-50 p-3 text-blue-700">
+											<div className="font-medium">涉及的表</div>
 											<div className="font-semibold text-sm">
-												{result.preSQL.difficulty === "simple"
-													? "简单"
-													: result.preSQL.difficulty === "medium"
-														? "中等"
-														: "困难"}
+												{result.preSQL.selectedTables?.length || 0} 张表
 											</div>
 										</div>
 										<div className="rounded bg-purple-50 p-3 text-purple-700">
-											<div className="font-medium">语义搜索</div>
+											<div className="font-medium">时间范围</div>
 											<div className="font-semibold text-sm">
-												{result.preSQL.needsSemanticSearch ? "需要" : "不需要"}
+												{result.preSQL.timeRange || "无时间限制"}
 											</div>
 										</div>
-
-										<div className="rounded bg-indigo-50 p-3 text-indigo-700">
-											<div className="font-medium">查询类型</div>
-											<div className="text-sm">{result.preSQL.queryType}</div>
+										<div className="rounded bg-green-50 p-3 text-green-700">
+											<div className="font-medium">分析步骤</div>
+											<div className="text-sm">
+												{result.preSQL.analysisSteps?.length || 0} 步
+											</div>
 										</div>
 									</div>
 
@@ -158,24 +127,6 @@ export function ShowResults({ results }: ShowResultsProps) {
 									<div className="space-y-3">
 										<div className="rounded border bg-white p-3">
 											<h5 className="mb-2 font-medium text-gray-700">
-												🎯 难易程度分析
-											</h5>
-											<p className="text-gray-600 text-sm">
-												{result.preSQL.difficultyReason}
-											</p>
-										</div>
-
-										<div className="rounded border bg-white p-3">
-											<h5 className="mb-2 font-medium text-gray-700">
-												🗂️ 涉及的表和字段 (自然语言描述)
-											</h5>
-											<p className="text-gray-600 text-sm">
-												{result.preSQL.tablesAndFields}
-											</p>
-										</div>
-
-										<div className="rounded border bg-white p-3">
-											<h5 className="mb-2 font-medium text-gray-700">
 												📋 分析步骤
 											</h5>
 											<ol className="list-inside list-decimal space-y-1 text-gray-600 text-sm">
@@ -201,11 +152,50 @@ export function ShowResults({ results }: ShowResultsProps) {
 										{result.preSQL.sqlHints && (
 											<div className="rounded border bg-white p-3">
 												<h5 className="mb-2 font-medium text-gray-700">
-													⚠️ 风险或注意事项
+													💡 SQL 生成提示
 												</h5>
-												<p className="text-gray-600 text-sm">
-													{JSON.stringify(result.preSQL.sqlHints)}
-												</p>
+												<div className="space-y-2 text-sm">
+													{result.preSQL.sqlHints.orderBy && (
+														<div>
+															<span className="font-semibold text-gray-700">
+																排序:
+															</span>{" "}
+															{result.preSQL.sqlHints.orderBy
+																.map((o) => `${o.field} ${o.direction}`)
+																.join(", ")}
+														</div>
+													)}
+													{result.preSQL.sqlHints.groupBy && (
+														<div>
+															<span className="font-semibold text-gray-700">
+																分组:
+															</span>{" "}
+															{result.preSQL.sqlHints.groupBy.join(", ")}
+														</div>
+													)}
+													{result.preSQL.sqlHints.limit && (
+														<div>
+															<span className="font-semibold text-gray-700">
+																限制:
+															</span>{" "}
+															{result.preSQL.sqlHints.limit} 条
+														</div>
+													)}
+													{result.preSQL.sqlHints.specialConditions && (
+														<div>
+															<span className="font-semibold text-gray-700">
+																特殊条件:
+															</span>
+															<ul className="mt-1 list-inside list-disc text-gray-600">
+																{result.preSQL.sqlHints.specialConditions.map(
+																	(condition, idx) => (
+																		<li key={idx}>{condition}</li>
+																	),
+																)}
+															</ul>
+														</div>
+													)}
+												</div>
 											</div>
 										)}
 									</div>

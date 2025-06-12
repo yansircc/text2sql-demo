@@ -1,5 +1,17 @@
 import { FieldFilters, generateJsonSchema } from "@/types/db.schema";
-import { lv1, lv2, lv3, lv4, lv5, lv6, lv7 } from "./test-library";
+import {
+	type Difficulty,
+	hybrid,
+	lv1,
+	lv2,
+	lv3,
+	lv4,
+	lv5,
+	lv6,
+	lv7,
+	nonsense,
+	semantic,
+} from "./test-library";
 
 // 使用真实的数据库 schema
 export const DatabaseSchema = JSON.stringify(generateJsonSchema());
@@ -15,7 +27,7 @@ export const VectorizedDatabaseSchema = JSON.stringify(
 export interface QueryTask {
 	id: string;
 	text: string;
-	difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+	difficulty: Difficulty;
 	category: string;
 	description: string;
 	tables: string[];
@@ -43,15 +55,22 @@ export const queryTasks: Record<number, QueryTask[]> = {
 
 	// 7表查询 - 全景式战略分析
 	7: lv7,
+
+	// 无效查询
+	20: nonsense,
+
+	// 语义查询
+	21: semantic,
+
+	// 混合查询
+	22: hybrid,
 };
 
 // 获取所有任务的扁平化数组
 export const allTasks: QueryTask[] = Object.values(queryTasks).flat();
 
 // 按难度获取任务
-export function getTasksByDifficulty(
-	difficulty: 1 | 2 | 3 | 4 | 5 | 6 | 7,
-): QueryTask[] {
+export function getTasksByDifficulty(difficulty: Difficulty): QueryTask[] {
 	return queryTasks[difficulty] || [];
 }
 
@@ -66,9 +85,7 @@ export function getAllCategories(): string[] {
 }
 
 // 获取随机任务
-export function getRandomTask(
-	difficulty?: 1 | 2 | 3 | 4 | 5 | 6 | 7,
-): QueryTask {
+export function getRandomTask(difficulty?: Difficulty): QueryTask {
 	const tasks = difficulty ? getTasksByDifficulty(difficulty) : allTasks;
 	if (tasks.length === 0) {
 		throw new Error(`No tasks available for difficulty ${difficulty || "any"}`);
@@ -80,7 +97,7 @@ export function getRandomTask(
 // 获取多个随机任务（不重复）
 export function getRandomTasks(
 	count: number,
-	difficulty?: 1 | 2 | 3 | 4 | 5 | 6 | 7,
+	difficulty?: Difficulty,
 ): QueryTask[] {
 	const tasks = difficulty ? getTasksByDifficulty(difficulty) : allTasks;
 	const shuffled = [...tasks].sort(() => Math.random() - 0.5);

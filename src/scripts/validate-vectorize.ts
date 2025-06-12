@@ -15,7 +15,7 @@ export const validateVectorizeCompanies = async (
 			console.log("\n🔎 测试优化搜索...");
 			try {
 				const searchResults = await qdrantService.search(collectionName, {
-					vectorName: "requiredProducts",
+					vectorName: "requiredProducts19978277361",
 					vector: searchVector,
 					limit: 5,
 					withPayload: true,
@@ -50,7 +50,7 @@ export const validateVectorizeCompanies = async (
 					collectionName,
 					[
 						{
-							vectorName: "requiredProducts",
+							vectorName: "requiredProducts19978277361",
 							vector: searchVector,
 							limit: 3,
 							withPayload: true,
@@ -75,7 +75,8 @@ export const validateVectorizeCompanies = async (
 				console.log(`  批量搜索返回 ${batchResults.length} 个结果集`);
 
 				for (const [batchIndex, results] of batchResults.entries()) {
-					const vectorName = batchIndex === 0 ? "requiredProducts" : "remark";
+					const vectorName =
+						batchIndex === 0 ? "requiredProducts19978277361" : "remark";
 					console.log(`\n  ${vectorName} 向量搜索结果 (${results.length} 个):`);
 
 					for (const [index, result] of results.entries()) {
@@ -95,7 +96,7 @@ export const validateVectorizeCompanies = async (
 					collectionName,
 					[
 						{
-							vectorName: "requiredProducts",
+							vectorName: "requiredProducts19978277361",
 							vector: searchVector,
 							limit: 5,
 							withPayload: true,

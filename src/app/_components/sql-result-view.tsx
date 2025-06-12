@@ -194,17 +194,17 @@ export function SQLResultView() {
 				{/* PreSQL 信息摘要 */}
 				<div className="mt-6 grid grid-cols-2 gap-4">
 					<div className="rounded-lg bg-gray-50 p-4">
-						<h4 className="mb-2 font-semibold text-gray-700">查询类型</h4>
-						<p className="text-gray-600">{currentSession.preSQL.queryType}</p>
+						<h4 className="mb-2 font-semibold text-gray-700">涉及的表</h4>
+						<p className="text-gray-600">
+							{currentSession.preSQL.selectedTables
+								.map((t) => t.tableName)
+								.join(", ")}
+						</p>
 					</div>
 					<div className="rounded-lg bg-gray-50 p-4">
-						<h4 className="mb-2 font-semibold text-gray-700">复杂度</h4>
+						<h4 className="mb-2 font-semibold text-gray-700">分析步骤数</h4>
 						<p className="text-gray-600">
-							{currentSession.preSQL.difficulty === "simple"
-								? "简单"
-								: currentSession.preSQL.difficulty === "medium"
-									? "中等"
-									: "困难"}
+							{currentSession.preSQL.analysisSteps.length} 步
 						</p>
 					</div>
 				</div>

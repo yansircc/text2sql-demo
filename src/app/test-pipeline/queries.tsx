@@ -1,11 +1,12 @@
 import { getRandomTask, taskStats } from "./constants";
+import type { Difficulty } from "./test-library";
 
 interface ExampleQueriesProps {
 	onQuerySelect: (query: string) => void;
 }
 
 export function ExampleQueries({ onQuerySelect }: ExampleQueriesProps) {
-	const handleRandomTask = (difficulty?: 1 | 2 | 3 | 4 | 5 | 6 | 7) => {
+	const handleRandomTask = (difficulty?: Difficulty) => {
 		const task = getRandomTask(difficulty);
 		onQuerySelect(task.text);
 	};
@@ -32,6 +33,42 @@ export function ExampleQueries({ onQuerySelect }: ExampleQueriesProps) {
 					}}
 				>
 					随机 ({taskStats.total} 个任务)
+				</button>
+
+				<button
+					onClick={() => handleRandomTask(20)}
+					style={{
+						padding: "8px 16px",
+						border: "1px solid #ccc",
+						backgroundColor: "white",
+						cursor: "pointer",
+					}}
+				>
+					无效查询({taskStats.byDifficulty[20]}个)
+				</button>
+
+				<button
+					onClick={() => handleRandomTask(21)}
+					style={{
+						padding: "8px 16px",
+						border: "1px solid #ccc",
+						backgroundColor: "white",
+						cursor: "pointer",
+					}}
+				>
+					语义查询({taskStats.byDifficulty[21]}个)
+				</button>
+
+				<button
+					onClick={() => handleRandomTask(22)}
+					style={{
+						padding: "8px 16px",
+						border: "1px solid #ccc",
+						backgroundColor: "white",
+						cursor: "pointer",
+					}}
+				>
+					混合查询({taskStats.byDifficulty[22]}个)
 				</button>
 
 				<button

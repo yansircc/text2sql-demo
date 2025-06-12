@@ -12,12 +12,18 @@ export const companiesSchema = z
 			.string()
 			.max(500)
 			.describe("公司全称，如'深圳市科技创新有限公司'")
+			.meta({
+				isVectorized: true,
+			})
 			.default(""),
 		serialId: z.string().max(100).describe("外部序列号（通常为空）").optional(),
 		shortName: z
 			.string()
 			.max(200)
 			.describe("公司简称，如'科技创新'、'贸易发展'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		country: z
 			.string()
@@ -104,14 +110,23 @@ export const companiesSchema = z
 		searchKeywords7375691812971: z
 			.string()
 			.describe("客户搜索关键词（营销来源追踪）")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		mainBusiness7375678270531: z
 			.string()
 			.describe("主营业务，如'人工智能软件开发'、'国际贸易'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		inquiryKeywords22467658539: z
 			.string()
 			.describe("客户询盘时的关键词")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		requiredProducts19978277361: z
 			.string()

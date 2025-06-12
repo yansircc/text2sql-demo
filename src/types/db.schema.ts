@@ -59,7 +59,7 @@ export type FieldFilter = (fieldName: string, fieldSchema: any) => boolean;
 // 预定义的常用过滤器
 export const FieldFilters = {
 	// 只包含向量化字段
-	vectorizedOnly: (fieldSchema: any) => {
+	vectorizedOnly: (_fieldName: string, fieldSchema: any) => {
 		return (
 			typeof fieldSchema === "object" &&
 			fieldSchema !== null &&
@@ -69,17 +69,17 @@ export const FieldFilters = {
 	},
 
 	// 只包含必填字段
-	requiredOnly: (fieldSchema: any) => {
+	requiredOnly: (_fieldName: string, fieldSchema: any) => {
 		return fieldSchema?.required === true;
 	},
 
 	// 只包含字符串类型字段
-	stringOnly: (fieldSchema: any) => {
+	stringOnly: (fieldName: string, fieldSchema: any) => {
 		return fieldSchema?.type === "string";
 	},
 
 	// 只包含数字类型字段
-	numberOnly: (fieldSchema: any) => {
+	numberOnly: (_fieldName: string, fieldSchema: any) => {
 		return fieldSchema?.type === "number";
 	},
 
@@ -89,12 +89,13 @@ export const FieldFilters = {
 	},
 
 	// 根据描述关键词过滤
-	byDescription: (keywords: string[]) => (fieldSchema: any) => {
-		const description = fieldSchema?.description?.toLowerCase() || "";
-		return keywords.some((keyword) =>
-			description.includes(keyword.toLowerCase()),
-		);
-	},
+	byDescription:
+		(keywords: string[]) => (_fieldName: string, fieldSchema: any) => {
+			const description = fieldSchema?.description?.toLowerCase() || "";
+			return keywords.some((keyword) =>
+				description.includes(keyword.toLowerCase()),
+			);
+		},
 
 	// 组合过滤器 - AND 逻辑
 	and:

@@ -1,8 +1,8 @@
 "use client";
 
 import { ActionButtons } from "./action-buttons";
-import { ExampleQueries } from "./example-queries";
 import { ProcessDescription } from "./process-description";
+import { ExampleQueries } from "./queries";
 import { QueryInput } from "./query-input";
 import { ResultDisplay } from "./result-display";
 import { usePipeline } from "./use-pipeline";

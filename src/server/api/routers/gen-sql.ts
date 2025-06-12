@@ -45,6 +45,8 @@ export const genSQLRouter = createTRPCRouter({
 		)
 		.mutation(async ({ input }) => {
 			try {
+				console.log("[GenSQL] 开始生成SQL");
+
 				const openai = createOpenAI({
 					apiKey: env.AIHUBMIX_API_KEY,
 					baseURL: env.AIHUBMIX_BASE_URL,
@@ -151,7 +153,27 @@ ${sqlHintsPrompt ? `**SQL 生成提示:**${sqlHintsPrompt}` : ""}
 
 只需要生成 SQL 语句，不需要其他任何分析或建议。`;
 
-				console.log("systemPrompt: " + systemPrompt);
+				console.log("[GenSQL] 准备生成SQL:", {
+					tables: input.preSQL.selectedTables.map((t) => t.tableName),
+					hasTimeRange: !!input.preSQL.timeRange,
+					timeRange: input.preSQL.timeRange,
+					hintsType: (() => {
+						const hints = input.preSQL.sqlHints;
+						if (!hints) return [];
+						const types = [];
+						if (hints.orderBy?.length) types.push("orderBy");
+						if (hints.groupBy?.length) types.push("groupBy");
+						if (hints.limit !== undefined && hints.limit !== null)
+							types.push("limit");
+						if (hints.aggregations?.length) types.push("aggregations");
+						if (hints.joins?.length) types.push("joins");
+						if (hints.specialConditions?.length)
+							types.push("specialConditions");
+						if (hints.timeFieldHints?.length) types.push("timeFieldHints");
+						if (hints.distinct) types.push("distinct");
+						return types;
+					})(),
+				});
 
 				const { object: result } = await generateObject({
 					// model: openai("gpt-4.1"),
@@ -162,7 +184,12 @@ ${sqlHintsPrompt ? `**SQL 生成提示:**${sqlHintsPrompt}` : ""}
 					temperature: 0.1, // 低温度确保一致性
 				});
 
-				console.log("result: " + result.sql);
+				console.log("[GenSQL] SQL生成完成:", {
+					sqlLength: result.sql.length,
+					hasSelect: result.sql.toLowerCase().includes("select"),
+					hasJoin: result.sql.toLowerCase().includes("join"),
+					hasWhere: result.sql.toLowerCase().includes("where"),
+				});
 
 				return {
 					success: true,
@@ -170,7 +197,7 @@ ${sqlHintsPrompt ? `**SQL 生成提示:**${sqlHintsPrompt}` : ""}
 					timestamp: new Date().toISOString(),
 				};
 			} catch (error) {
-				console.error("SQL 生成错误:", error);
+				console.error("[GenSQL] 生成错误:", error);
 				throw new Error("SQL 生成服务暂时不可用，请稍后再试");
 			}
 		}),

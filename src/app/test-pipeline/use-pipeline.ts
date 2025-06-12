@@ -135,11 +135,18 @@ export function usePipeline() {
 			const preHandleResult = await preHandleMutation.mutateAsync({
 				query,
 				databaseSchema: DatabaseSchema,
+				vectorizedDatabaseSchema: VectorizedDatabaseSchema,
 			});
 			setResults((prev) => ({ ...prev, preHandle: preHandleResult }));
 
 			// 检查是否需要继续
-			if (preHandleResult.result.decision.action !== "proceed_sync") {
+			const action = preHandleResult.result.decision.action;
+			if (
+				action === "not_feasible" ||
+				action === "request_clarification" ||
+				action === "too_many_tables" ||
+				action === "vector_only" // 纯向量搜索直接返回结果
+			) {
 				console.log(
 					"流程在 Pre-Handle 阶段停止:",
 					preHandleResult.result.decision,
@@ -148,15 +155,36 @@ export function usePipeline() {
 			}
 
 			// Step 2: Pre-SQL
-			const preHandleInfo = JSON.stringify({
-				selectedTables:
-					preHandleResult.result.searchRequirement.databaseQuery?.tables,
-			});
+			let preHandleInfo: string;
+			let vectorSearchContext: any;
+
+			if (action === "hybrid_search" && preHandleResult.hybridSearch) {
+				// 混合搜索：包含向量搜索上下文
+				preHandleInfo = JSON.stringify({
+					selectedTables:
+						preHandleResult.result.searchRequirement.sqlQuery?.tables || [],
+					hybridMode: true,
+				});
+				vectorSearchContext = {
+					hasVectorResults: true,
+					companyIds: preHandleResult.hybridSearch.vectorResult.results.map(
+						(r: any) => r.companyId,
+					),
+					summary: preHandleResult.hybridSearch.vectorResult.summary,
+				};
+			} else {
+				// 纯SQL查询
+				preHandleInfo = JSON.stringify({
+					selectedTables:
+						preHandleResult.result.searchRequirement.sqlQuery?.tables || [],
+				});
+			}
 
 			const preSQLResult = await preSQLMutation.mutateAsync({
 				naturalLanguageQuery: query,
 				databaseSchema: DatabaseSchema,
 				preHandleInfo,
+				vectorSearchContext,
 			});
 			setResults((prev) => ({ ...prev, preSQL: preSQLResult }));
 

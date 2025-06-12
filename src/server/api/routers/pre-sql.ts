@@ -78,7 +78,11 @@ export const PreSQLSchema = z.object({
 				.describe("分组字段，如果需要分组的话"),
 
 			// 限制数量
-			limit: z.number().optional().describe("结果数量限制，如果有的话"),
+			limit: z
+				.number()
+				.nullable()
+				.optional()
+				.describe("结果数量限制，如果有的话"),
 
 			// 聚合函数
 			aggregations: z
@@ -165,10 +169,26 @@ export const preSQLRouter = createTRPCRouter({
 				databaseSchema: z.string().describe("数据库schema的JSON字符串"),
 				context: z.string().optional().describe("额外的上下文信息"),
 				preHandleInfo: z.string().optional().describe("预处理阶段的信息"),
+				vectorSearchContext: z
+					.object({
+						hasVectorResults: z.boolean().describe("是否有向量搜索结果"),
+						companyIds: z
+							.array(z.number())
+							.optional()
+							.describe("向量搜索返回的公司ID列表"),
+						summary: z.string().optional().describe("向量搜索结果摘要"),
+					})
+					.optional()
+					.describe("向量搜索的上下文信息（用于混合搜索）"),
 			}),
 		)
 		.mutation(async ({ input }) => {
 			try {
+				console.log(
+					"[PreSQL] 开始生成PreSQL，查询:",
+					input.naturalLanguageQuery,
+				);
+
 				const openai = createOpenAI({
 					apiKey: env.AIHUBMIX_API_KEY,
 					baseURL: env.AIHUBMIX_BASE_URL,
@@ -185,6 +205,10 @@ export const preSQLRouter = createTRPCRouter({
 							preHandleData.selectedTables &&
 							preHandleData.selectedTables.length > 0
 						) {
+							console.log(
+								"[PreSQL] 使用预选的表:",
+								preHandleData.selectedTables,
+							);
 							// 只保留预选的表的 schema
 							const fullSchema = JSON.parse(input.databaseSchema);
 							const filteredSchema: Record<string, any> = {};
@@ -202,38 +226,75 @@ export const preSQLRouter = createTRPCRouter({
 					}
 				}
 
+				// 构建向量搜索上下文信息
+				let vectorContextPrompt = "";
+				if (input.vectorSearchContext?.hasVectorResults) {
+					console.log("[PreSQL] 包含向量搜索上下文:", {
+						companyCount: input.vectorSearchContext.companyIds?.length || 0,
+						hasIds: !!input.vectorSearchContext.companyIds,
+					});
+
+					vectorContextPrompt = `
+
+**向量搜索上下文**：
+- 已经执行了语义向量搜索
+- 找到了 ${input.vectorSearchContext.companyIds?.length || 0} 个相关公司
+- 公司ID列表: ${input.vectorSearchContext.companyIds?.join(", ") || "无"}
+${input.vectorSearchContext.summary ? `- 摘要: ${input.vectorSearchContext.summary}` : ""}
+
+对于混合搜索场景，你可以：
+1. 使用这些公司ID作为 WHERE IN 条件的一部分
+2. 或者将向量搜索结果作为子查询或CTE的输入
+3. 考虑使用 CASE WHEN 给向量搜索匹配的记录更高的权重`;
+				}
+
 				const systemPrompt = `你是一个SQL生成专家。基于预处理结果和数据库schema，准备SQL生成所需的精确信息。
 
 当前时间: ${currentTime}
 数据库Schema（仅包含相关表）: ${selectedTablesSchema}
 上下文: ${input.context || "无"}
-预处理信息: ${input.preHandleInfo || "无"}
+预处理信息: ${input.preHandleInfo || "无"}${vectorContextPrompt}
+
+**2025年最佳实践原则**：
+1. **优先使用SQL模糊查询**：
+   - 如果查询包含明确的关键词，优先使用 LIKE '%keyword%' 或 GLOB 模式
+   - SQLite支持的模糊查询：LIKE, GLOB, REGEXP (需要扩展)
+   - 示例：查找"包含AI的公司" → WHERE name LIKE '%AI%' OR products LIKE '%AI%'
+   
+2. **合理使用混合搜索结果**：
+   - 如果有向量搜索结果的公司ID，可以作为过滤条件
+   - 但不要完全依赖向量搜索结果，SQL查询应该独立完整
+   - 示例：WHERE id IN (向量搜索结果) OR (其他SQL条件)
+
+3. **智能字段选择**：
+   - 只选择查询真正需要的字段
+   - 对于文本搜索，优先选择已建立索引的字段
 
 请生成精简的SQL生成准备信息：
 
 1. **精确选择表和字段**：
    - 基于查询需求，从给定的表中选择必要的字段
    - 严格匹配schema中存在的表名和字段名
-   - 注意：只能使用提供的表，不要引用其他表
+   - 说明是否可以通过SQL模糊查询解决
 
 2. **分析步骤**：
    - 简洁描述SQL构建的逻辑步骤
-   - 每步一句话，专注于SQL实现
+   - 明确指出哪些可以用LIKE解决，哪些需要精确匹配
 
 3. **时间处理**：
    - 将自然语言时间转换为具体时间范围
    - 识别时间字段的存储格式
 
 4. **SQL提示生成**：
-   - 基于查询需求生成具体的SQL构建提示
-   - 包含必要的排序、分组、聚合、关联等信息
-   - 特别注意时间字段的处理方式
+   - 生成具体的模糊查询模式
+   - 如果有向量搜索结果，说明如何整合
+   - 包含必要的排序、分组、聚合等信息
 
 **核心要求**：
-- 只使用提供的表和字段
-- 专注于SQL生成所需的信息
-- 时间处理要具体化，便于SQL实现
-- 保持简洁，避免冗余分析`;
+- 优先考虑SQL模糊查询而非向量搜索
+- 明确标识哪些条件可以用LIKE/GLOB解决
+- 如果是混合搜索，合理整合向量搜索结果
+- 保持SQL查询的独立性和完整性`;
 
 				const { object: preSQL } = await generateObject({
 					model: openai("gpt-4.1"),
@@ -243,25 +304,57 @@ export const preSQLRouter = createTRPCRouter({
 					temperature: 0.1,
 				});
 
+				console.log("[PreSQL] AI分析完成:", {
+					selectedTables: preSQL.selectedTables.length,
+					tables: preSQL.selectedTables.map((t) => t.tableName),
+					hasTimeRange: !!preSQL.timeRange,
+					hasSQLHints: !!preSQL.sqlHints,
+					hintsOrderBy: preSQL.sqlHints?.orderBy?.length || 0,
+					hintsAggregations: preSQL.sqlHints?.aggregations?.length || 0,
+				});
+
+				// 如果有模糊查询提示，添加到SQL hints中
+				if (preSQL.sqlHints && input.preHandleInfo) {
+					try {
+						const preHandleData = JSON.parse(input.preHandleInfo);
+						if (
+							preHandleData.searchRequirement?.sqlQuery?.fuzzySearchPatterns
+						) {
+							preSQL.sqlHints.specialConditions = [
+								...(preSQL.sqlHints.specialConditions || []),
+								...preHandleData.searchRequirement.sqlQuery.fuzzySearchPatterns.map(
+									(pattern: string) => `使用模糊查询: ${pattern}`,
+								),
+							];
+						}
+					} catch (e) {
+						// 忽略解析错误
+					}
+				}
+
 				return {
 					success: true,
 					preSQL,
 					rawQuery: input.naturalLanguageQuery,
 					processingTime: new Date().toISOString(),
+					hasVectorContext: !!input.vectorSearchContext?.hasVectorResults,
 					tablesUsed: (() => {
 						if (selectedTablesSchema === input.databaseSchema) {
+							console.log("[PreSQL] 使用完整schema");
 							return "all";
 						}
 						try {
 							const schema = JSON.parse(selectedTablesSchema);
-							return Object.keys(schema);
+							const tables = Object.keys(schema);
+							console.log("[PreSQL] 使用精简schema，表数:", tables.length);
+							return tables;
 						} catch {
 							return [];
 						}
 					})(),
 				};
 			} catch (error) {
-				console.error("PreSQL 生成错误:", error);
+				console.error("[PreSQL] 生成错误:", error);
 				throw new Error("PreSQL 分析服务暂时不可用，请稍后再试");
 			}
 		}),

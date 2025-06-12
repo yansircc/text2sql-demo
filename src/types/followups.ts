@@ -15,6 +15,9 @@ export const followUpsSchema = z
 		content: z
 			.string()
 			.describe("跟进内容，如'与客户技术总监进行了初步沟通...'")
+			.meta({
+				isVectorized: true,
+			})
 			.default(""),
 		type: z
 			.number()

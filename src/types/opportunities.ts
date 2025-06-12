@@ -12,6 +12,9 @@ export const opportunitiesSchema = z
 			.string()
 			.max(500)
 			.describe("商机名称，如'深圳科技创新-AI驱动CRM系统项目'")
+			.meta({
+				isVectorized: true,
+			})
 			.default(""),
 		serialId: z
 			.string()
@@ -48,6 +51,9 @@ export const opportunitiesSchema = z
 		remark: z
 			.string()
 			.describe("商机备注，如'高价值项目，客户对AI功能需求强烈'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		createTime: z.number().describe("外部CRM创建时间戳（通常为空）").optional(),
 		updateTime: z.number().describe("外部CRM更新时间戳（通常为空）").optional(),

@@ -23,6 +23,9 @@ export const whatsappMessagesSchema = z
 		body: z
 			.string()
 			.describe("消息内容，如'您好，我是深圳科技创新的刘总监...'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		fromMe: z
 			.number()

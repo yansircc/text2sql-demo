@@ -219,7 +219,6 @@ async function universalVectorize(config: VectorizerConfig) {
 		}
 
 		// 4. 创建集合配置
-		console.log("\n📁 创建向量集合...");
 		const vectorsConfig: Record<string, { size: number; distance: "Cosine" }> =
 			{};
 		for (const field of finalTextFields) {
@@ -229,11 +228,17 @@ async function universalVectorize(config: VectorizerConfig) {
 			};
 		}
 
-		await qdrantService.createCollection(collectionName, {
-			vectors: vectorsConfig,
-		});
-
-		console.log(`✅ 创建集合成功，包含 ${finalTextFields.length} 个向量字段`);
+		// 只有在集合不存在时才创建
+		if (!exists || (!resumeMode && !skipExisting)) {
+			console.log("\n📁 创建向量集合...");
+			await qdrantService.createCollection(collectionName, {
+				vectors: vectorsConfig,
+			});
+			console.log(`✅ 创建集合成功，包含 ${finalTextFields.length} 个向量字段`);
+		} else {
+			console.log(`\n📁 使用现有集合: ${collectionName}`);
+			console.log(`  配置向量字段: ${finalTextFields.join(", ")}`);
+		}
 
 		// 5. 获取全部数据
 		console.log("\n📊 获取全部数据...");
@@ -381,6 +386,7 @@ async function universalVectorize(config: VectorizerConfig) {
 			skippedRecords: skipCount,
 			resumeSkippedRecords: resumeSkipCount,
 			vectorFields: finalTextFields,
+			plannedFields: textFields,
 			totalVectors: allEmbeddings.length,
 			totalRecordsProcessed: allData.length,
 		};

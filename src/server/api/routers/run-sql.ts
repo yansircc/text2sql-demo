@@ -42,6 +42,15 @@ export const runSQLRouter = createTRPCRouter({
 
 			try {
 				const { genSQLResult, validate, readOnly } = input;
+				console.log("[RunSQL] 开始执行SQL:", {
+					sqlPreview:
+						genSQLResult.sql.substring(0, 100) +
+						(genSQLResult.sql.length > 100 ? "..." : ""),
+					validate,
+					readOnly,
+					confidence: genSQLResult.confidence,
+				});
+
 				let validationResult = null;
 
 				// 第一步：验证 SQL（如果需要）
@@ -74,6 +83,8 @@ export const runSQLRouter = createTRPCRouter({
 						queryType = "DDL";
 					}
 
+					console.log("[RunSQL] SQL类型:", queryType);
+
 					// 安全检查
 					if (readOnly && queryType !== "SELECT") {
 						errors.push("只读模式下只允许执行 SELECT 查询");
@@ -101,6 +112,10 @@ export const runSQLRouter = createTRPCRouter({
 						queryType,
 					};
 
+					if (!validationResult.isValid) {
+						console.log("[RunSQL] 验证失败:", errors);
+					}
+
 					// 如果验证失败，直接返回
 					if (!validationResult.isValid) {
 						return {
@@ -113,8 +128,15 @@ export const runSQLRouter = createTRPCRouter({
 				}
 
 				// 第二步：执行 SQL
+				console.log("[RunSQL] 开始执行查询");
 				const result = await db.all(drizzleSql.raw(genSQLResult.sql));
 				const executionTime = Date.now() - startTime;
+
+				console.log("[RunSQL] 查询完成:", {
+					rowCount: result.length,
+					executionTime,
+					hasData: result.length > 0,
+				});
 
 				return {
 					success: true,
@@ -127,7 +149,7 @@ export const runSQLRouter = createTRPCRouter({
 					confidence: genSQLResult.confidence,
 				};
 			} catch (error: any) {
-				console.error("Pipeline SQL 执行错误:", error);
+				console.error("[RunSQL] 执行错误:", error);
 				const executionTime = Date.now() - startTime;
 
 				return {

@@ -25,7 +25,8 @@
 			"style": {
 				"noNonNullAssertion": "off",
 				"useTemplate": "off",
-				"noUselessElse": "off"
+				"noUselessElse": "off",
+				"noUnusedTemplateLiteral": "off"
 			},
 			"correctness": {
 				"useExhaustiveDependencies": {
@@ -49,7 +50,11 @@
 					"level": "warn",
 					"fix": "safe",
 					"options": {
-						"functions": ["clsx", "cva", "cn"]
+						"functions": [
+							"clsx",
+							"cva",
+							"cn"
+						]
 					}
 				}
 			},
