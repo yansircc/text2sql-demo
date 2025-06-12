@@ -68,6 +68,9 @@ export const companiesSchema = z
 		remark: z
 			.string()
 			.describe("客户备注，如'高潜力客户，重点关注'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		createTime: z
 			.number()
@@ -113,6 +116,9 @@ export const companiesSchema = z
 		requiredProducts19978277361: z
 			.string()
 			.describe("客户需求产品，如'CRM系统，项目管理工具'")
+			.meta({
+				isVectorized: true,
+			})
 			.optional(),
 		publicAllocation19977530773: z
 			.string()

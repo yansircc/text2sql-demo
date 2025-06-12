@@ -5,15 +5,10 @@ import type {
 	CollectionConfig,
 	HybridSearchOptions,
 	HybridSearchResult,
+	NamedVectorSearchOptions,
 	PayloadIndexOptions,
 	PointData,
 } from "./schema";
-
-interface SearchOptions {
-	vector: number[];
-	limit?: number;
-	filter?: Record<string, unknown>;
-}
 
 class QdrantService {
 	private client: QdrantClient;
@@ -87,12 +82,19 @@ class QdrantService {
 		}
 	}
 
-	// Point operations
+	// Point operations - 只支持 Named Vectors
 	async upsertPoints(collectionName: string, points: PointData[], wait = true) {
 		try {
+			// 转换为 Qdrant 客户端期望的格式
+			const qdrantPoints = points.map((point) => ({
+				id: point.id,
+				vectors: point.vectors,
+				payload: point.payload,
+			}));
+
 			return await this.client.upsert(collectionName, {
 				wait,
-				points,
+				points: qdrantPoints as any, // 使用 any 绕过类型检查
 			});
 		} catch (error) {
 			console.error(`Error upserting points to ${collectionName}:`, error);
@@ -136,45 +138,51 @@ class QdrantService {
 		}
 	}
 
-	// Search operations
-	async search(collectionName: string, options: SearchOptions) {
-		try {
-			return await this.client.search(collectionName, options);
-		} catch (error) {
-			console.error(`Error searching in ${collectionName}:`, error);
-			throw error;
-		}
-	}
-
-	async searchWithFilter(
+	// Search operations - 只支持 Named Vector 搜索
+	async searchNamedVector(
 		collectionName: string,
-		vector: number[],
-		filter: Record<string, unknown>,
-		limit = 10,
+		options: NamedVectorSearchOptions,
 	) {
 		try {
-			return await this.client.search(collectionName, {
-				vector,
-				filter,
-				limit,
-			});
+			const searchOptions = {
+				vector: {
+					name: options.vectorName,
+					vector: options.vector,
+				},
+				limit: options.limit,
+				filter: options.filter,
+				with_payload: options.withPayload,
+				with_vectors: options.withVectors,
+			};
+
+			return await this.client.search(collectionName, searchOptions as any);
 		} catch (error) {
-			console.error(`Error searching with filter in ${collectionName}:`, error);
+			console.error(
+				`Error searching named vector in ${collectionName}:`,
+				error,
+			);
 			throw error;
 		}
 	}
 
 	async searchBatch(
 		collectionName: string,
-		searches: {
-			vector: number[];
-			limit: number;
-			filter?: Record<string, unknown>;
-		}[],
+		searches: NamedVectorSearchOptions[],
 	) {
 		try {
+			const batchSearches = searches.map((search) => ({
+				vector: {
+					name: search.vectorName,
+					vector: search.vector,
+				},
+				limit: search.limit,
+				filter: search.filter,
+				with_payload: search.withPayload,
+				with_vectors: search.withVectors,
+			}));
+
 			return await this.client.searchBatch(collectionName, {
-				searches,
+				searches: batchSearches as any,
 			});
 		} catch (error) {
 			console.error(`Error batch searching in ${collectionName}:`, error);
@@ -182,16 +190,12 @@ class QdrantService {
 		}
 	}
 
-	// 通用混合搜索方法 - 支持任意字段的过滤和搜索
-	/**
-	 * 执行通用混合搜索 - 结合向量搜索和关键词搜索
-	 * 支持任意字段的过滤条件和关键词搜索字段
-	 * @param options 通用搜索选项
-	 */
+	// 混合搜索 - 支持多个命名向量
 	async hybridSearch(options: HybridSearchOptions) {
 		const {
 			collectionName,
 			query,
+			vectorNames,
 			limit,
 			scoreNormalization,
 			candidateMultiplier,
@@ -214,62 +218,103 @@ class QdrantService {
 			// 2. 执行混合搜索
 			const allResults: HybridSearchResult[] = [];
 
-			// 2.1 向量搜索 - 语义相似度
-			// 构建向量搜索的过滤器
-			let vectorFilter: Record<string, unknown> = {};
-			if (filter && Object.keys(filter).length > 0) {
-				if (useShould) {
-					// 使用should逻辑(OR) - 任意过滤条件匹配即可
-					vectorFilter = {
-						should: Object.entries(filter).map(([key, value]) => ({
-							key,
-							match: { value },
-						})),
-					};
-				} else {
-					// 使用must逻辑(AND) - 所有过滤条件都必须匹配
-					vectorFilter = {
-						must: Object.entries(filter).map(([key, value]) => ({
-							key,
-							match: { value },
-						})),
-					};
-				}
-			}
-
-			const vectorResults = await this.search(collectionName, {
-				vector: embedding,
-				limit: candidateLimit,
-				filter: vectorFilter,
-			});
-
-			// 2.2 关键词搜索 - 在指定字段中精确匹配
-			const keywordSearches = keywordFields.map((field) => {
-				let keywordFilter: Record<string, unknown>;
-
+			// 2.1 向量搜索 - 对每个命名向量进行搜索
+			const vectorSearchPromises = vectorNames.map(async (vectorName) => {
+				// 构建向量搜索的过滤器
+				let vectorFilter: Record<string, unknown> = {};
 				if (filter && Object.keys(filter).length > 0) {
 					if (useShould) {
-						// 使用should逻辑 - 原有过滤条件作为should，关键词搜索作为must
-						keywordFilter = {
-							must: [
-								{
-									key: field,
-									match: { text: query },
-								},
-							],
+						// 使用should逻辑(OR) - 任意过滤条件匹配即可
+						vectorFilter = {
 							should: Object.entries(filter).map(([key, value]) => ({
 								key,
 								match: { value },
 							})),
 						};
 					} else {
-						// 使用must逻辑 - 所有条件都必须匹配
-						keywordFilter = {
-							must: [
-								...Object.entries(filter).map(([key, value]) => ({
+						// 使用must逻辑(AND) - 所有过滤条件都必须匹配
+						vectorFilter = {
+							must: Object.entries(filter).map(([key, value]) => ({
+								key,
+								match: { value },
+							})),
+						};
+					}
+				}
+
+				const results = await this.searchNamedVector(collectionName, {
+					vectorName,
+					vector: embedding,
+					limit: candidateLimit,
+					filter: vectorFilter,
+					withPayload: true,
+					withVectors: false,
+				});
+
+				return { vectorName, results };
+			});
+
+			const vectorSearchResults = await Promise.all(vectorSearchPromises);
+
+			// 处理向量搜索结果
+			for (const { vectorName, results } of vectorSearchResults) {
+				if (results && results.length > 0) {
+					const formattedResults = results.map((r, index) => ({
+						id: String(r.id),
+						score: r.score || 0,
+						payload: r.payload as { text: string; [key: string]: unknown },
+						metadata: {
+							source: "vector" as const,
+							originalScore: r.score,
+							vector_rank: index,
+							keyword_rank: -1,
+							vectorName,
+						},
+					}));
+
+					allResults.push(...formattedResults);
+				}
+			}
+
+			// 2.2 关键词搜索 - 在指定字段中精确匹配
+			const keywordSearchPromises = keywordFields.flatMap((field) =>
+				vectorNames.map(async (vectorName) => {
+					let keywordFilter: Record<string, unknown>;
+
+					if (filter && Object.keys(filter).length > 0) {
+						if (useShould) {
+							// 使用should逻辑 - 原有过滤条件作为should，关键词搜索作为must
+							keywordFilter = {
+								must: [
+									{
+										key: field,
+										match: { text: query },
+									},
+								],
+								should: Object.entries(filter).map(([key, value]) => ({
 									key,
 									match: { value },
 								})),
+							};
+						} else {
+							// 使用must逻辑 - 所有条件都必须匹配
+							keywordFilter = {
+								must: [
+									...Object.entries(filter).map(([key, value]) => ({
+										key,
+										match: { value },
+									})),
+									{
+										key: field,
+										match: { text: query },
+									},
+								],
+							};
+						}
+					} else {
+						// 没有额外过滤条件，只搜索关键词字段
+						keywordFilter = {
+							must: [
 								{
 									key: field,
 									match: { text: query },
@@ -277,46 +322,31 @@ class QdrantService {
 							],
 						};
 					}
-				} else {
-					// 没有额外过滤条件，只搜索关键词字段
-					keywordFilter = {
-						must: [
-							{
-								key: field,
-								match: { text: query },
-							},
-						],
-					};
-				}
 
-				return this.search(collectionName, {
-					vector: embedding,
-					limit: candidateLimit,
-					filter: keywordFilter,
-				});
-			});
+					const results = await this.searchNamedVector(collectionName, {
+						vectorName,
+						vector: embedding,
+						limit: candidateLimit,
+						filter: keywordFilter,
+						withPayload: true,
+						withVectors: false,
+					});
 
-			// 并行执行所有关键词搜索
-			const keywordResultsArray = await Promise.all(keywordSearches);
-			const keywordResults = keywordResultsArray.flat();
+					return { vectorName, field, results };
+				}),
+			);
 
-			// 3. 转换结果格式
-			// 处理向量搜索结果
-			if (vectorResults && vectorResults.length > 0) {
-				const formattedResults = vectorResults.map((r) => ({
-					id: String(r.id),
-					score: r.score || 0,
-					payload: r.payload as { text: string; [key: string]: unknown },
-					metadata: {
-						source: "vector" as const,
-						originalScore: r.score,
-						vector_rank: vectorResults.findIndex((vr) => vr.id === r.id),
-						keyword_rank: -1,
-					},
-				}));
-
-				allResults.push(...formattedResults);
-			}
+			const keywordSearchResults = await Promise.all(keywordSearchPromises);
+			const keywordResults = keywordSearchResults.flatMap(
+				({ vectorName, results }) =>
+					results.map((r, index) => ({
+						id: String(r.id),
+						score: r.score || 0,
+						payload: r.payload as { text: string; [key: string]: unknown },
+						vectorName,
+						keyword_rank: index,
+					})),
+			);
 
 			// 处理关键词搜索结果
 			if (keywordResults && keywordResults.length > 0) {
@@ -324,35 +354,33 @@ class QdrantService {
 				const existingIds = new Set(allResults.map((r) => r.id));
 
 				for (const r of keywordResults) {
-					const id = String(r.id);
-					const keywordRank = keywordResults.findIndex((kr) => kr.id === r.id);
-
 					// 如果ID已存在，只更新元数据
-					if (existingIds.has(id)) {
+					if (existingIds.has(r.id)) {
 						for (const existingResult of allResults) {
-							if (existingResult.id === id && existingResult.metadata) {
-								existingResult.metadata.keyword_rank = keywordRank;
+							if (existingResult.id === r.id && existingResult.metadata) {
+								existingResult.metadata.keyword_rank = r.keyword_rank;
 								break;
 							}
 						}
 					} else {
 						// 创建新的结果项
 						allResults.push({
-							id,
-							score: r.score || 0,
-							payload: r.payload as { text: string; [key: string]: unknown },
+							id: r.id,
+							score: r.score,
+							payload: r.payload,
 							metadata: {
 								source: "keyword" as const,
 								originalScore: r.score,
 								vector_rank: -1,
-								keyword_rank: keywordRank,
+								keyword_rank: r.keyword_rank,
+								vectorName: r.vectorName,
 							},
 						});
 					}
 				}
 			}
 
-			// 4. 应用Reciprocal Rank Fusion (RRF)来合并结果
+			// 3. 应用Reciprocal Rank Fusion (RRF)来合并结果
 			const idToResultMap = new Map();
 			const k = 20; // RRF参数k
 
@@ -390,7 +418,7 @@ class QdrantService {
 				}
 			}
 
-			// 5. 排序并归一化
+			// 4. 排序并归一化
 			let fusedResults = Array.from(idToResultMap.values()).sort(
 				(a, b) => (b.rrf_score || 0) - (a.rrf_score || 0),
 			);
@@ -431,21 +459,25 @@ class QdrantService {
 				});
 			}
 
-			// 6. 返回最终结果
+			// 5. 返回最终结果
 			return {
 				results: fusedResults.slice(0, limit),
 				fusionDetails: {
 					totalResults: fusedResults.length,
 					returnedResults: Math.min(fusedResults.length, limit),
-					vectorResultsCount: vectorResults.length,
+					vectorResultsCount: vectorSearchResults.reduce(
+						(sum, { results }) => sum + results.length,
+						0,
+					),
 					keywordResultsCount: keywordResults.length,
 					normalizationMethod: scoreNormalization,
 					searchedFields: keywordFields,
+					searchedVectors: vectorNames,
 					appliedFilter: filter,
 				},
 			};
 		} catch (error) {
-			console.error("Flexible hybrid search error:", error);
+			console.error("Hybrid search error:", error);
 			throw error;
 		}
 	}

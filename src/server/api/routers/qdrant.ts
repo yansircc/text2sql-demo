@@ -1,6 +1,7 @@
 import {
 	collectionConfigSchema,
 	hybridSearchOptionsSchema,
+	namedVectorSearchOptionsSchema,
 	payloadIndexSchema,
 	pointDataSchema,
 } from "@/lib/qdrant/schema";
@@ -55,7 +56,7 @@ export const qdrantRouter = createTRPCRouter({
 			);
 		}),
 
-	// Points operations
+	// Points operations - Named Vectors only
 	upsertPoints: publicProcedure
 		.input(
 			z.object({
@@ -132,39 +133,18 @@ export const qdrantRouter = createTRPCRouter({
 			);
 		}),
 
-	// Search operations
-	search: publicProcedure
+	// Search operations - Named Vectors only
+	searchNamedVector: publicProcedure
 		.input(
 			z.object({
 				collectionName: z.string(),
-				vector: z.array(z.number()),
-				limit: z.number().optional(),
-				filter: z.record(z.unknown()).optional(),
+				options: namedVectorSearchOptionsSchema,
 			}),
 		)
 		.query(async ({ input }) => {
-			return await qdrantService.search(input.collectionName, {
-				vector: input.vector,
-				limit: input.limit,
-				filter: input.filter,
-			});
-		}),
-
-	searchWithFilter: publicProcedure
-		.input(
-			z.object({
-				collectionName: z.string(),
-				vector: z.array(z.number()),
-				filter: z.record(z.unknown()),
-				limit: z.number().optional(),
-			}),
-		)
-		.query(async ({ input }) => {
-			return await qdrantService.searchWithFilter(
+			return await qdrantService.searchNamedVector(
 				input.collectionName,
-				input.vector,
-				input.filter,
-				input.limit,
+				input.options,
 			);
 		}),
 
@@ -172,13 +152,7 @@ export const qdrantRouter = createTRPCRouter({
 		.input(
 			z.object({
 				collectionName: z.string(),
-				searches: z.array(
-					z.object({
-						vector: z.array(z.number()),
-						limit: z.number(),
-						filter: z.record(z.unknown()).optional(),
-					}),
-				),
+				searches: z.array(namedVectorSearchOptionsSchema),
 			}),
 		)
 		.query(async ({ input }) => {
@@ -188,14 +162,14 @@ export const qdrantRouter = createTRPCRouter({
 			);
 		}),
 
-	// 混合搜索 - 使用通用hybridSearch方法
+	// 混合搜索 - 支持多个命名向量
 	hybridSearch: publicProcedure
 		.input(hybridSearchOptionsSchema)
 		.mutation(async ({ input }) => {
 			try {
 				return await qdrantService.hybridSearch(input);
 			} catch (error) {
-				console.error("Flexible hybrid search error:", error);
+				console.error("Hybrid search error:", error);
 				throw error;
 			}
 		}),

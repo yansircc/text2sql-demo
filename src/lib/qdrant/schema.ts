@@ -1,17 +1,22 @@
 import { z } from "zod";
 
+// Named Vectors Point 数据结构（主要数据结构）
 const pointDataSchema = z.object({
 	id: z.union([z.string(), z.number()]),
-	vector: z.array(z.number()),
+	vectors: z.record(z.array(z.number())), // 支持多个命名向量
 	payload: z.record(z.unknown()).optional(),
 });
 type PointData = z.infer<typeof pointDataSchema>;
 
+// 单个向量配置
+const vectorConfigSchema = z.object({
+	size: z.number(),
+	distance: z.enum(["Cosine", "Euclid", "Dot"]),
+});
+
+// 集合配置 - 只支持Named Vectors
 const collectionConfigSchema = z.object({
-	vectors: z.object({
-		size: z.number(),
-		distance: z.enum(["Cosine", "Euclid", "Dot"]),
-	}),
+	vectors: z.record(vectorConfigSchema), // 只支持多向量配置（Named Vectors）
 	optimizers_config: z
 		.object({
 			default_segment_number: z.number().optional(),
@@ -28,10 +33,22 @@ const payloadIndexSchema = z.object({
 });
 type PayloadIndexOptions = z.infer<typeof payloadIndexSchema>;
 
-// 搜索选项的Zod模式
+// 搜索选项
+const namedVectorSearchOptionsSchema = z.object({
+	vectorName: z.string(),
+	vector: z.array(z.number()),
+	limit: z.number().optional().default(10),
+	filter: z.record(z.unknown()).optional(),
+	withPayload: z.boolean().optional().default(true),
+	withVectors: z.boolean().optional().default(false),
+});
+type NamedVectorSearchOptions = z.infer<typeof namedVectorSearchOptionsSchema>;
+
+// 混合搜索选项
 const hybridSearchOptionsSchema = z.object({
 	collectionName: z.string(),
 	query: z.string(),
+	vectorNames: z.array(z.string()).optional().default(["text"]), // 支持多个向量名称
 	limit: z.number().optional().default(10),
 	scoreNormalization: z
 		.enum(["none", "percentage", "exponential"])
@@ -64,6 +81,7 @@ const hybridSearchResultSchema = z.object({
 		vector_rank: z.number(),
 		keyword_rank: z.number(),
 		raw_rrf_score: z.number().optional(),
+		vectorName: z.string().optional(), // 添加向量名称信息
 	}),
 	rrf_score: z.number().optional(),
 });
@@ -73,11 +91,13 @@ export {
 	pointDataSchema,
 	collectionConfigSchema,
 	payloadIndexSchema,
+	namedVectorSearchOptionsSchema,
 	hybridSearchOptionsSchema,
 	hybridSearchResultSchema,
 	type PointData,
 	type CollectionConfig,
 	type PayloadIndexOptions,
+	type NamedVectorSearchOptions,
 	type HybridSearchOptions,
 	type HybridSearchResult,
 };
