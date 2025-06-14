@@ -3,6 +3,7 @@ import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
 import { resultFusionSimpleRouter } from "@/server/api/routers/result-fusion-simple";
+import { resultFusionRobustRouter } from "@/server/api/routers/result-fusion-robust";
 import { schemaSelectorRouter } from "@/server/api/routers/schema-selector";
 import { sqlBuilderRouter } from "@/server/api/routers/sql-builder";
 import { sqlBuilderTripleRouter } from "@/server/api/routers/sql-builder-triple";
@@ -28,6 +29,7 @@ export const appRouter = createTRPCRouter({
 	sqlErrorHandler: sqlErrorHandlerRouter,
 	resultFusion: resultFusionRouter,
 	resultFusionSimple: resultFusionSimpleRouter,
+	resultFusionRobust: resultFusionRobustRouter,
 	workflow: workflowOrchestratorRouter,
 	workflowOptimized: workflowOrchestratorOptimizedRouter,
 

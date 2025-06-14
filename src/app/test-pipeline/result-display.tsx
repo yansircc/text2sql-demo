@@ -450,6 +450,7 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 						}}>
 							(使用 {wf.metadata.fusionMethod === "ai_intelligent" ? "AI智能融合" : 
 							       wf.metadata.fusionMethod === "simple_selection" ? "简单选择融合" : 
+							       wf.metadata.fusionMethod === "robust_ranking" ? "鲁棒排序融合" :
 							       wf.metadata.fusionMethod} 策略)
 						</span>
 					)}

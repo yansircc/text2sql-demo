@@ -76,7 +76,7 @@ export default function TestPipelinePage() {
 						style={{ width: "18px", height: "18px", cursor: "pointer" }}
 					/>
 					<span style={{ fontSize: "14px", fontWeight: "500" }}>
-						使用简单融合策略 (AI选择记录和字段)
+						使用鲁棒融合策略 (AI评分排序，保留原始数据)
 					</span>
 					{useSimpleFusion && (
 						<span style={{ 
@@ -86,7 +86,7 @@ export default function TestPipelinePage() {
 							backgroundColor: "#e8f5e9",
 							borderRadius: "4px"
 						}}>
-							🎯 更安全可控的融合方式
+							🛡️ 最安全的融合方式，AI只排序不修改数据
 						</span>
 					)}
 				</label>

@@ -486,14 +486,14 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							
 							// 选择使用哪种融合策略
 							if (input.options?.useSimpleFusion) {
-								console.log("[Workflow] 使用简单融合策略");
-								fusionResult = await api.resultFusionSimple.fuse({
+								console.log("[Workflow] 使用鲁棒融合策略");
+								fusionResult = await api.resultFusionRobust.fuse({
 									userQuery: input.query,
 									vectorResults: vectorResults.results,
 									sqlResults: sqlExecResult.result.rows,
 									maxResults: input.options?.maxRows || 100,
 								});
-								fusionMethod = "simple_selection";
+								fusionMethod = "robust_ranking";
 							} else {
 								fusionResult = await api.resultFusion.fuse({
 									userQuery: input.query,

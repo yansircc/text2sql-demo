@@ -57,6 +57,8 @@ function executeSimpleMerge(
 	const results: any[] = [];
 	const mergeKey = selection.mergeRule.mergeKey;
 	const addedKeys = new Set<any>();
+	
+	console.log("[SimpleFusion] 执行合并，合并键:", mergeKey);
 
 	// 处理向量选择
 	selection.vectorSelections.forEach((sel) => {
@@ -70,8 +72,13 @@ function executeSimpleMerge(
 					filtered[field] = record[field];
 				}
 			});
+			
+			// Ensure we always have the merge key
+			if (record[mergeKey] !== undefined && !filtered[mergeKey]) {
+				filtered[mergeKey] = record[mergeKey];
+			}
 
-			const key = filtered[mergeKey];
+			const key = filtered[mergeKey] || record[mergeKey];
 			if (key) {
 				addedKeys.add(key);
 			}
@@ -156,7 +163,14 @@ export const resultFusionSimpleRouter = createTRPCRouter({
 						.map(([k, v]) => `${k}: ${v}`),
 				}));
 
-				const systemPrompt = `你是数据选择专家。用户查询：${input.userQuery}
+				const systemPrompt = `你是数据选择专家。
+
+用户查询：${input.userQuery}
+
+分析用户需求：
+${input.userQuery.includes("国家") || input.userQuery.includes("country") ? "- 用户想知道客户的国家信息" : ""}
+${input.userQuery.includes("联系") || input.userQuery.includes("contact") ? "- 用户需要联系方式" : ""}
+${input.userQuery.includes("客户") || input.userQuery.includes("company") ? "- 用户需要公司信息" : ""}
 
 向量搜索结果（${input.vectorResults?.length || 0}条）：
 ${JSON.stringify(vectorInfo?.slice(0, 10), null, 2)}
@@ -167,12 +181,13 @@ ${JSON.stringify(sqlInfo?.slice(0, 10), null, 2)}
 任务：
 1. 从每个数据源选择最相关的记录（通过index）
 2. 为每条记录选择用户需要的字段
-3. 说明选择原因
+3. 基于用户查询选择合适的字段
 
-注意：
-- 只选择真正相关的记录，不要全选
-- 只选择用户需要的字段，不要全部字段
-- 如果两个来源有相同的记录（通过ID判断），考虑合并`;
+重要提示：
+- 用户问"哪些国家"，必须包含 country/countryName 字段
+- 用户问"客户"，必须包含 id/companyId, name 字段
+- 用户问"联系方式"，必须包含 tel/phone/email 等字段
+- 如果两个来源有相同的记录（通过companyId判断），考虑合并`;
 
 				const { object: selection } = await generateObject({
 					model: openai("gpt-4o-mini"),
@@ -185,6 +200,13 @@ ${JSON.stringify(sqlInfo?.slice(0, 10), null, 2)}
 				console.log("[SimpleFusion] AI选择完成:", {
 					vectorSelections: selection.vectorSelections.length,
 					sqlSelections: selection.sqlSelections.length,
+				});
+				
+				// Debug: log what AI selected
+				console.log("[SimpleFusion] AI选择详情:", {
+					vectorFields: selection.vectorSelections[0]?.fields || [],
+					sqlFields: selection.sqlSelections[0]?.fields || [],
+					mergeKey: selection.mergeRule.mergeKey,
 				});
 
 				// 执行合并
