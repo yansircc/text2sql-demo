@@ -7,6 +7,7 @@ export function usePipeline() {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<PipelineResults>({});
 	const [useTripleBuilder, setUseTripleBuilder] = useState(false);
+	const [useSimpleFusion, setUseSimpleFusion] = useState(false);
 
 	// 新版工作流 API
 	const workflowMutation = api.workflow.execute.useMutation();
@@ -23,6 +24,7 @@ export function usePipeline() {
 				options: {
 					maxRows: 100,
 					useTripleSqlBuilder: useTripleBuilder,
+					useSimpleFusion: useSimpleFusion,
 				},
 			});
 
@@ -58,5 +60,7 @@ export function usePipeline() {
 		isLoading: workflowMutation.isPending,
 		useTripleBuilder,
 		setUseTripleBuilder,
+		useSimpleFusion,
+		setUseSimpleFusion,
 	};
 }

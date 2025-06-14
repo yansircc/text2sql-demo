@@ -443,8 +443,16 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 					}}
 				>
 					向量搜索找到 {wf.metadata.vectorSearchCount} 个相关结果
-					{wf.metadata.fusionMethod &&
-						` (使用 ${wf.metadata.fusionMethod.toUpperCase()} 融合算法)`}
+					{wf.metadata.fusionMethod && (
+						<span style={{
+							marginLeft: "8px",
+							color: wf.metadata.fusionMethod === "simple_selection" ? "#4caf50" : "#2196f3"
+						}}>
+							(使用 {wf.metadata.fusionMethod === "ai_intelligent" ? "AI智能融合" : 
+							       wf.metadata.fusionMethod === "simple_selection" ? "简单选择融合" : 
+							       wf.metadata.fusionMethod} 策略)
+						</span>
+					)}
 				</div>
 			)}
 		</div>

@@ -6,7 +6,7 @@ import { ResultDisplay } from "./result-display";
 import { usePipeline } from "./use-pipeline";
 
 export default function TestPipelinePage() {
-	const { query, setQuery, results, executeQuery, clearResults, isLoading, useTripleBuilder, setUseTripleBuilder } =
+	const { query, setQuery, results, executeQuery, clearResults, isLoading, useTripleBuilder, setUseTripleBuilder, useSimpleFusion, setUseSimpleFusion } =
 		usePipeline();
 
 	return (
@@ -41,8 +41,9 @@ export default function TestPipelinePage() {
 
 			<QueryInput query={query} onQueryChange={setQuery} />
 
-			{/* Triple SQL Builder Toggle */}
-			<div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+			{/* Advanced Options */}
+			<div style={{ marginBottom: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+				{/* Triple SQL Builder Toggle */}
 				<label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
 					<input
 						type="checkbox"
@@ -53,18 +54,42 @@ export default function TestPipelinePage() {
 					<span style={{ fontSize: "14px", fontWeight: "500" }}>
 						使用三重SQL策略 (3个并行构建 + 投票)
 					</span>
+					{useTripleBuilder && (
+						<span style={{ 
+							fontSize: "12px", 
+							color: "#666",
+							padding: "4px 8px",
+							backgroundColor: "#e3f2fd",
+							borderRadius: "4px"
+						}}>
+							⚠️ 耗时较长但准确性更高
+						</span>
+					)}
 				</label>
-				{useTripleBuilder && (
-					<span style={{ 
-						fontSize: "12px", 
-						color: "#666",
-						padding: "4px 8px",
-						backgroundColor: "#e3f2fd",
-						borderRadius: "4px"
-					}}>
-						⚠️ 耗时较长但准确性更高
+				
+				{/* Simple Fusion Toggle */}
+				<label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+					<input
+						type="checkbox"
+						checked={useSimpleFusion}
+						onChange={(e) => setUseSimpleFusion(e.target.checked)}
+						style={{ width: "18px", height: "18px", cursor: "pointer" }}
+					/>
+					<span style={{ fontSize: "14px", fontWeight: "500" }}>
+						使用简单融合策略 (AI选择记录和字段)
 					</span>
-				)}
+					{useSimpleFusion && (
+						<span style={{ 
+							fontSize: "12px", 
+							color: "#666",
+							padding: "4px 8px",
+							backgroundColor: "#e8f5e9",
+							borderRadius: "4px"
+						}}>
+							🎯 更安全可控的融合方式
+						</span>
+					)}
+				</label>
 			</div>
 
 			<div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>

@@ -36,10 +36,20 @@ export const resultFusionRouter = createTRPCRouter({
 		.mutation(async ({ input }) => {
 			try {
 				const startTime = Date.now();
+				const vectorResults = input.vectorResults
+					? JSON.stringify(input.vectorResults.slice(0, 5), null, 2)
+					: "无";
+
+				const sqlResults = input.sqlResults
+					? JSON.stringify(input.sqlResults.slice(0, 5), null, 2)
+					: "无";
+
 				console.log("[ResultFusion] 开始AI融合:", {
 					query: input.userQuery.substring(0, 50) + "...",
 					vectorCount: input.vectorResults?.length || 0,
 					sqlCount: input.sqlResults?.length || 0,
+					vectorResults: vectorResults.slice(0, 3),
+					sqlResults: sqlResults.slice(0, 3),
 				});
 
 				const openai = createOpenAI({
@@ -53,10 +63,10 @@ export const resultFusionRouter = createTRPCRouter({
 用户查询: ${input.userQuery}
 
 向量搜索结果:
-${input.vectorResults ? JSON.stringify(input.vectorResults.slice(0, 5), null, 2) : "无"}
+${vectorResults}
 
 SQL搜索结果:
-${input.sqlResults ? JSON.stringify(input.sqlResults.slice(0, 5), null, 2) : "无"}
+${sqlResults}
 
 要求:
 1. 理解用户需求，挑选最相关的数据

@@ -31,6 +31,7 @@ export const WorkflowInputSchema = z.object({
 			timeout: z.number().default(30000),
 			enableCache: z.boolean().default(false),
 			useTripleSqlBuilder: z.boolean().default(false),
+			useSimpleFusion: z.boolean().default(false),
 		})
 		.optional(),
 });
@@ -481,12 +482,27 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							console.log("[Workflow] Step 5: 结果融合");
 							const fusionStartTime = Date.now();
 
-							const fusionResult = await api.resultFusion.fuse({
-								userQuery: input.query,
-								vectorResults: vectorResults.results,
-								sqlResults: sqlExecResult.result.rows,
-								maxResults: input.options?.maxRows || 100,
-							});
+							let fusionResult;
+							
+							// 选择使用哪种融合策略
+							if (input.options?.useSimpleFusion) {
+								console.log("[Workflow] 使用简单融合策略");
+								fusionResult = await api.resultFusionSimple.fuse({
+									userQuery: input.query,
+									vectorResults: vectorResults.results,
+									sqlResults: sqlExecResult.result.rows,
+									maxResults: input.options?.maxRows || 100,
+								});
+								fusionMethod = "simple_selection";
+							} else {
+								fusionResult = await api.resultFusion.fuse({
+									userQuery: input.query,
+									vectorResults: vectorResults.results,
+									sqlResults: sqlExecResult.result.rows,
+									maxResults: input.options?.maxRows || 100,
+								});
+								fusionMethod = "ai_intelligent";
+							}
 
 							steps.push({
 								name: "ResultFusion",
@@ -499,7 +515,6 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 								Record<string, unknown>
 							>;
 							rowCount = fusionResult.count;
-							fusionMethod = "ai_intelligent";
 						} else {
 							// 纯 SQL 结果
 							finalData = sqlExecResult.result.rows as Array<
