@@ -45,6 +45,10 @@ yarn-error.log*
 # idea files
 .idea
 
+# All md files except README.md
+*.md
+!README.md
+
 # misc
 /.cursor/
 /scripts/
@@ -52,5 +56,3 @@ yarn-error.log*
 
 # Claude
 /.claude/
-/CLAUDE.md
-projectplan.md

@@ -105,7 +105,7 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						queryId,
 						status: "failed" as const,
 						strategy: "rejected" as const,
-						error: analysisResult.analysis.feasibility.reason,
+						error: analysisResult.analysis.reason || "Query not feasible",
 						metadata: {
 							totalTime: Date.now() - startTime,
 							steps: context.steps,
@@ -115,8 +115,18 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 
 				if (strategy === "vector_only") {
 					// Direct vector search - no schema needed
+					if (!analysisResult.analysis.vectorQueries) {
+						throw new Error("Vector queries not available for vector_only strategy");
+					}
+					const queries = analysisResult.analysis.vectorQueries.map((vq: any) => ({
+						table: vq.table,
+						fields: [vq.field],
+						searchText: vq.query,
+						searchType: "semantic" as const,
+						weight: 1.0
+					}));
 					const vectorResult = await api.vectorSearch?.search({
-						queries: analysisResult.analysis.vectorConfig!.queries,
+						queries,
 						hnswEf: 128,
 					});
 
@@ -144,8 +154,10 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 
 				// SQL or Hybrid path - use parallel execution
 				if (strategy === "sql_only" || strategy === "hybrid") {
-					const sqlConfig = analysisResult.analysis.sqlConfig!;
-					const tables = sqlConfig.tables;
+					if (!analysisResult.analysis.sqlTables) {
+						throw new Error("SQL tables not available for sql_only/hybrid strategy");
+					}
+					const tables = analysisResult.analysis.sqlTables;
 
 					// Get filtered schema from registry
 					const filteredSchema = schemaRegistry.getFilteredSchema(
@@ -162,9 +174,15 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						// Execute ALL independent operations in parallel
 						const [vectorResults, schemaSelection] = await Promise.all([
 							// Vector search
-							analysisResult.analysis.vectorConfig
+							analysisResult.analysis.vectorQueries
 								? api.vectorSearch.search({
-										queries: analysisResult.analysis.vectorConfig.queries,
+										queries: analysisResult.analysis.vectorQueries.map((vq: any) => ({
+											table: vq.table,
+											fields: [vq.field],
+											searchText: vq.query,
+											searchType: "semantic" as const,
+											weight: 1.0
+										})),
 										hnswEf: 128,
 									})
 								: null,
@@ -172,9 +190,9 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 							// Schema selection (with minimal data)
 							api.schemaSelector.select({
 								query: input.query,
-								sqlConfig,
-								fullSchema: JSON.stringify(filteredSchema),
-								vectorContext: undefined, // Will be added after if needed
+								tables,
+								databaseSchema: JSON.stringify(filteredSchema),
+								vectorIds: undefined, // Will be added after if needed
 							}),
 						]);
 
@@ -198,12 +216,11 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						// SQL building with context
 						const sqlBuildResult = await api.sqlBuilder.build({
 							query: input.query,
-							slimSchema: schemaSelection.result.slimSchema,
-							selectedTables: schemaSelection.result.selectedTables,
-							sqlHints: {
-								...schemaSelection.result.sqlHints,
-								vectorIds: context.vectorContext?.ids,
-							},
+							tables: schemaSelection.result.tables,
+							fields: schemaSelection.result.fields,
+							joins: schemaSelection.result.joins,
+							timeField: schemaSelection.result.timeField,
+							vectorIds: context.vectorContext?.ids,
 						});
 
 						// Execute SQL
@@ -242,16 +259,17 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 					// SQL-only path (simplified)
 					const schemaSelection = await api.schemaSelector.select({
 						query: input.query,
-						sqlConfig,
-						fullSchema: JSON.stringify(filteredSchema),
-						vectorContext: undefined,
+						tables,
+						databaseSchema: JSON.stringify(filteredSchema),
+						vectorIds: undefined,
 					});
 
 					const sqlBuildResult = await api.sqlBuilder.build({
 						query: input.query,
-						slimSchema: schemaSelection.result.slimSchema,
-						selectedTables: schemaSelection.result.selectedTables,
-						sqlHints: schemaSelection.result.sqlHints,
+						tables: schemaSelection.result.tables,
+						fields: schemaSelection.result.fields,
+						joins: schemaSelection.result.joins,
+						timeField: schemaSelection.result.timeField,
 					});
 
 					const sqlExecResult = await api.sqlExecutor.execute({

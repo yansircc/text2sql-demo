@@ -2,12 +2,9 @@ import { cacheRouter } from "@/server/api/routers/cache";
 import { pipelineComparisonRouter } from "@/server/api/routers/pipeline-comparison";
 import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
-import { queryAnalyzerSimplifiedRouter } from "@/server/api/routers/query-analyzer-simplified";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
 import { schemaSelectorRouter } from "@/server/api/routers/schema-selector";
-import { schemaSelectorSimplifiedRouter } from "@/server/api/routers/schema-selector-simplified";
 import { sqlBuilderRouter } from "@/server/api/routers/sql-builder";
-import { sqlBuilderSimplifiedRouter } from "@/server/api/routers/sql-builder-simplified";
 import { sqlErrorHandlerRouter } from "@/server/api/routers/sql-error-handler";
 import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
 import { vectorSearchRouter } from "@/server/api/routers/vector-search";
@@ -30,11 +27,6 @@ export const appRouter = createTRPCRouter({
 	resultFusion: resultFusionRouter,
 	workflow: workflowOrchestratorRouter,
 	workflowOptimized: workflowOrchestratorOptimizedRouter,
-
-	// 简化版模块 (优化AI生成速度)
-	queryAnalyzerSimplified: queryAnalyzerSimplifiedRouter,
-	schemaSelectorSimplified: schemaSelectorSimplifiedRouter,
-	sqlBuilderSimplified: sqlBuilderSimplifiedRouter,
 
 	// 测试与比较
 	pipelineComparison: pipelineComparisonRouter,

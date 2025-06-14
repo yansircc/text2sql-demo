@@ -230,7 +230,7 @@ async function runSimplifiedPipeline(
 	try {
 		// Step 1: Simplified Query Analysis
 		const analysisStart = Date.now();
-		const analysisResult = await ctx.queryAnalyzerSimplified.analyzeSimple({
+		const analysisResult = await ctx.queryAnalyzer.analyze({
 			query,
 			databaseSchema: schema,
 			vectorizedFields,
@@ -250,7 +250,7 @@ async function runSimplifiedPipeline(
 		// Step 2: Simplified Schema Selection (if needed)
 		if (analysisResult.analysis.sqlTables) {
 			const schemaStart = Date.now();
-			const schemaResult = await ctx.schemaSelectorSimplified.selectSimple({
+			const schemaResult = await ctx.schemaSelector.select({
 				query,
 				tables: analysisResult.analysis.sqlTables,
 				databaseSchema: schema,
@@ -265,7 +265,7 @@ async function runSimplifiedPipeline(
 			const sqlStart = Date.now();
 			const difficulty =
 				analysisResult.analysis.routing.confidence > 0.8 ? "easy" : "hard";
-			const sqlResult = await ctx.sqlBuilderSimplified.buildSimple({
+			const sqlResult = await ctx.sqlBuilder.build({
 				query,
 				...schemaResult.result,
 				difficulty,
