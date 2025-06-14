@@ -48,6 +48,7 @@ yarn-error.log*
 # misc
 /.cursor/
 /scripts/
+/docs/
 
 # Claude
 /.claude/

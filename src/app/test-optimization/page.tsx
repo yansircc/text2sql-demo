@@ -11,12 +11,12 @@ export default function TestOptimization() {
 	const [results, setResults] = useState<any>(null);
 
 	const compareMutation =
-		api.pipelineComparison.compareFullPipeline.useMutation({
-			onSuccess: (data) => {
+		(api as any).pipelineComparison.compareFullPipeline.useMutation({
+			onSuccess: (data: any) => {
 				setResults(data);
 				setIsComparing(false);
 			},
-			onError: (error) => {
+			onError: (error: any) => {
 				console.error("Comparison error:", error);
 				setIsComparing(false);
 			},

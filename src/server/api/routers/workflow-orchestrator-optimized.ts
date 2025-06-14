@@ -264,7 +264,7 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						queryId,
 						status: "success" as const,
 						strategy: "sql_only" as const,
-						data: sqlExecResult.result.rows,
+						data: sqlExecResult.result.rows as Array<Record<string, unknown>>,
 						rowCount: sqlExecResult.result.rowCount,
 						metadata: {
 							totalTime: Date.now() - startTime,

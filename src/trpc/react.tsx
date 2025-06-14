@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink, loggerLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
@@ -42,7 +43,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 	const queryClient = getQueryClient();
 
 	const [trpcClient] = useState(() =>
-		api.createClient({
+		(api as any).createClient({
 			links: [
 				loggerLink({
 					enabled: (op) =>
@@ -64,9 +65,11 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<api.Provider client={trpcClient} queryClient={queryClient}>
-				{props.children}
-			</api.Provider>
+			{React.createElement(
+				(api as any).Provider,
+				{ client: trpcClient, queryClient },
+				props.children
+			)}
 		</QueryClientProvider>
 	);
 }
