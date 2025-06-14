@@ -11,10 +11,14 @@ export interface WorkflowResult {
 			status: "success" | "skipped" | "failed";
 			time: number;
 			error?: string;
+			cached?: boolean;
 		}>;
 		sql?: string;
 		vectorSearchCount?: number;
 		fusionMethod?: string;
+		sqlModel?: string;
+		sqlDifficulty?: string;
+		cacheHits?: number;
 	};
 	error?: string;
 	suggestions?: string[];

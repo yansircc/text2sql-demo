@@ -6,26 +6,30 @@ export class PerformanceMonitor {
 		fn: () => Promise<T>,
 	): Promise<{ result: T; duration: number }> {
 		const start = performance.now();
-		
+
 		try {
 			const result = await fn();
 			const duration = performance.now() - start;
-			
+
 			// Track metrics
 			if (!this.metrics.has(operation)) {
 				this.metrics.set(operation, []);
 			}
 			this.metrics.get(operation)!.push(duration);
-			
+
 			// Log slow operations
 			if (duration > 1000) {
-				console.warn(`[Performance] Slow operation: ${operation} took ${duration}ms`);
+				console.warn(
+					`[Performance] Slow operation: ${operation} took ${duration}ms`,
+				);
 			}
-			
+
 			return { result, duration };
 		} catch (error) {
 			const duration = performance.now() - start;
-			console.error(`[Performance] Failed operation: ${operation} after ${duration}ms`);
+			console.error(
+				`[Performance] Failed operation: ${operation} after ${duration}ms`,
+			);
 			throw error;
 		}
 	}
@@ -33,7 +37,7 @@ export class PerformanceMonitor {
 	getStats(operation: string) {
 		const durations = this.metrics.get(operation) || [];
 		if (durations.length === 0) return null;
-		
+
 		const sorted = [...durations].sort((a, b) => a - b);
 		return {
 			count: durations.length,

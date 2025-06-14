@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { cacheManager } from "@/server/lib/cache-manager";
 
 /**
  * Schema Selector Router - CloudFlare Workflow Step 2B
@@ -91,6 +92,26 @@ export const schemaSelectorRouter = createTRPCRouter({
 				tables: input.sqlConfig.tables,
 				hasVectorContext: !!input.vectorContext?.hasResults,
 			});
+
+			// Generate cache key
+			const cacheKey = cacheManager.generateCacheKey("schema", {
+				query: input.query,
+				sqlConfig: input.sqlConfig,
+				schemaHash: input.fullSchema.substring(0, 100), // Use partial schema for cache key
+				vectorIds: input.vectorContext?.ids?.slice(0, 10), // Include top vector IDs in cache key
+			});
+
+			// Check cache first
+			const cached = await cacheManager.getSchemaSelection(cacheKey);
+			if (cached) {
+				console.log("[SchemaSelector] 使用缓存结果");
+				return {
+					success: true,
+					result: cached,
+					executionTime: Date.now() - startTime,
+					cached: true,
+				};
+			}
 
 			try {
 				const openai = createOpenAI({
@@ -184,6 +205,9 @@ ${JSON.stringify(fullSchema, null, 2)}
 					sqlHints: selection.sqlHints,
 				};
 
+				// Cache the result
+				await cacheManager.setSchemaSelection(cacheKey, result);
+
 				console.log("[SchemaSelector] 选择完成:", {
 					selectedTables: result.selectedTables.length,
 					totalFields: result.selectedTables.reduce(
@@ -198,6 +222,7 @@ ${JSON.stringify(fullSchema, null, 2)}
 					success: true,
 					result,
 					executionTime: Date.now() - startTime,
+					cached: false,
 				};
 			} catch (error) {
 				console.error("[SchemaSelector] 选择错误:", error);

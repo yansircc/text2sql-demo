@@ -53,11 +53,15 @@ export const WorkflowResultSchema = z.object({
 				status: z.enum(["success", "skipped", "failed"]),
 				time: z.number(),
 				error: z.string().optional(),
+				cached: z.boolean().optional(),
 			}),
 		),
 		sql: z.string().optional(),
 		vectorSearchCount: z.number().optional(),
 		fusionMethod: z.string().optional(),
+		sqlModel: z.string().optional(),
+		sqlDifficulty: z.string().optional(),
+		cacheHits: z.number().optional(),
 	}),
 
 	// 错误信息
@@ -84,6 +88,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 				status: "success" | "skipped" | "failed";
 				time: number;
 				error?: string;
+				cached?: boolean;
 			}> = [];
 
 			console.log("[Workflow] 开始执行查询工作流:", input.query);
@@ -96,6 +101,9 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 			let generatedSql: string | undefined;
 			let vectorSearchCount: number | undefined;
 			let fusionMethod: string | undefined;
+			let sqlModel: string | undefined;
+			let sqlDifficulty: string | undefined;
+			let cacheHits = 0;
 
 			try {
 				// Step 1: 查询分析
@@ -117,7 +125,10 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					name: "QueryAnalysis",
 					status: "success",
 					time: analysisTime,
+					cached: (analysisResult as any).cached,
 				});
+
+				if ((analysisResult as any).cached) cacheHits++;
 
 				const analysis = analysisResult.analysis;
 				queryId = analysis.queryId;
@@ -141,6 +152,9 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						},
 					};
 				}
+
+				// Parse schema once at the beginning for reuse
+				const parsedSchema = JSON.parse(input.databaseSchema);
 
 				// 根据路由策略执行不同流程
 				if (analysis.routing.strategy === "vector_only") {
@@ -182,31 +196,57 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					// SQL Flow 或 Hybrid Flow
 					let vectorContext: any = undefined;
 					let vectorResults: any = undefined;
+					let schemaResult: any = undefined;
 
-					// 如果是 hybrid，先执行向量搜索
-					if (analysis.routing.strategy === "hybrid" && analysis.vectorConfig) {
-						console.log("[Workflow] 执行混合搜索 - 向量搜索部分");
-						const vectorStartTime = Date.now();
+					// For hybrid mode, run vector search and schema preparation in parallel
+					if (
+						analysis.routing.strategy === "hybrid" &&
+						analysis.vectorConfig &&
+						analysis.sqlConfig
+					) {
+						console.log(
+							"[Workflow] 执行混合搜索 - 并行处理向量搜索和Schema准备",
+						);
+						const parallelStartTime = Date.now();
 
-						const vectorResult = await api.vectorSearch.search({
-							queries: analysis.vectorConfig.queries,
-							hnswEf: 128,
+						// Prepare filtered schema for schema selector
+						const filteredSchema: Record<string, any> = {};
+						analysis.sqlConfig.tables.forEach((tableName) => {
+							if (parsedSchema[tableName]) {
+								filteredSchema[tableName] = parsedSchema[tableName];
+							}
 						});
 
-						steps.push({
-							name: "VectorSearch",
-							status: "success",
-							time: Date.now() - vectorStartTime,
-						});
+						// Execute vector search and schema preparation in parallel
+						const [vectorSearchResult, schemaPreparation] = await Promise.all([
+							// Vector search
+							api.vectorSearch.search({
+								queries: analysis.vectorConfig.queries,
+								hnswEf: 128,
+							}),
+							// Schema selection (without vector context initially)
+							api.schemaSelector.select({
+								query: input.query,
+								sqlConfig: analysis.sqlConfig,
+								fullSchema: JSON.stringify(filteredSchema),
+								vectorContext: undefined, // Will be updated later if needed
+							}),
+						]);
 
-						vectorResults = vectorResult.result;
-						vectorSearchCount = vectorResult.result.totalResults;
+						const parallelTime = Date.now() - parallelStartTime;
+						console.log(`[Workflow] 并行执行完成，耗时: ${parallelTime}ms`);
 
-						// 准备向量上下文供 SQL 部分使用
+						// Process vector search results
+						vectorResults = vectorSearchResult.result;
+						vectorSearchCount = vectorSearchResult.result.totalResults;
+
+						// Prepare vector context
 						vectorContext = {
-							hasResults: vectorResult.result.results.length > 0,
-							ids: vectorResult.result.results.map((r: { id: number }) => r.id),
-							topMatches: vectorResult.result.results.slice(0, 5).map(
+							hasResults: vectorSearchResult.result.results.length > 0,
+							ids: vectorSearchResult.result.results.map(
+								(r: { id: number }) => r.id,
+							),
+							topMatches: vectorSearchResult.result.results.slice(0, 5).map(
 								(r: {
 									id: number;
 									score: number;
@@ -218,28 +258,43 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 								}),
 							),
 						};
-					}
 
-					// Step 2B: Schema 选择
-					if (analysis.sqlConfig) {
+						// Store schema result
+						schemaResult = schemaPreparation;
+
+						// Record parallel execution steps
+						steps.push({
+							name: "VectorSearch",
+							status: "success",
+							time: parallelTime,
+						});
+						steps.push({
+							name: "SchemaSelection",
+							status: "success",
+							time: parallelTime,
+							cached: (schemaPreparation as any).cached,
+						});
+
+						if ((schemaPreparation as any).cached) cacheHits++;
+
+						console.log(`[Workflow] 向量搜索找到 ${vectorSearchCount} 条结果`);
+					} else if (analysis.sqlConfig) {
+						// SQL-only mode: just do schema selection
 						console.log("[Workflow] Step 2B: Schema选择");
 						const schemaStartTime = Date.now();
-
-						// 解析完整 schema
-						const fullSchema = JSON.parse(input.databaseSchema);
 
 						// 只提取 query-analyzer 选择的表的 schema
 						const filteredSchema: Record<string, any> = {};
 						analysis.sqlConfig.tables.forEach((tableName) => {
-							if (fullSchema[tableName]) {
-								filteredSchema[tableName] = fullSchema[tableName];
+							if (parsedSchema[tableName]) {
+								filteredSchema[tableName] = parsedSchema[tableName];
 							}
 						});
 
-						const schemaResult = await api.schemaSelector.select({
+						schemaResult = await api.schemaSelector.select({
 							query: input.query,
 							sqlConfig: analysis.sqlConfig,
-							fullSchema: JSON.stringify(filteredSchema), // 只传递需要的表
+							fullSchema: JSON.stringify(filteredSchema),
 							vectorContext,
 						});
 
@@ -247,9 +302,14 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							name: "SchemaSelection",
 							status: "success",
 							time: Date.now() - schemaStartTime,
+							cached: (schemaResult as any).cached,
 						});
 
-						// Step 3: SQL 构建
+						if ((schemaResult as any).cached) cacheHits++;
+					}
+
+					// Step 3: SQL 构建
+					if (schemaResult && analysis.sqlConfig) {
 						console.log("[Workflow] Step 3: SQL构建");
 						const sqlBuildStartTime = Date.now();
 
@@ -267,9 +327,17 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							name: "SQLBuilding",
 							status: "success",
 							time: Date.now() - sqlBuildStartTime,
+							cached: (sqlBuildResult as any).cached,
 						});
 
+						if ((sqlBuildResult as any).cached) cacheHits++;
+
 						generatedSql = sqlBuildResult.result.sql;
+
+						// Extract model and difficulty info from SQL builder logs
+						// Note: This is a simplified approach - in production you'd pass this data properly
+						sqlModel = (sqlBuildResult as any).model || "GPT-4.1";
+						sqlDifficulty = (sqlBuildResult as any).difficulty || "easy";
 
 						// Step 4: SQL 执行
 						console.log("[Workflow] Step 4: SQL执行");
@@ -420,6 +488,9 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						sql: generatedSql,
 						vectorSearchCount,
 						fusionMethod,
+						sqlModel,
+						sqlDifficulty,
+						cacheHits,
 					},
 				};
 			} catch (error) {

@@ -2,6 +2,7 @@ import { env } from "@/env";
 import { embedText } from "@/lib/embed-text";
 import { qdrantService } from "@/lib/qdrant/service";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { cacheManager } from "@/server/lib/cache-manager";
 import { z } from "zod";
 
 /**
@@ -65,71 +66,116 @@ export const vectorSearchRouter = createTRPCRouter({
 			}> = [];
 
 			try {
-				// 批量生成搜索向量
+				// 批量生成搜索向量 with caching
 				const searchVectors = await Promise.all(
-					input.queries.map((q) => embedText(q.searchText)),
+					input.queries.map(async (q) => {
+						// Check cache first
+						const cached = await cacheManager.getEmbedding(q.searchText);
+						if (cached) {
+							console.log(
+								`[VectorSearch] 使用缓存的向量: ${q.searchText.substring(0, 20)}...`,
+							);
+							return cached;
+						}
+
+						// Generate new embedding
+						const embedding = await embedText(q.searchText);
+
+						// Cache the embedding
+						if (embedding) {
+							await cacheManager.setEmbedding(q.searchText, embedding);
+						}
+
+						return embedding;
+					}),
 				);
 
-				// 并行执行所有搜索
-				const searchPromises = input.queries.flatMap((query, queryIndex) => {
-					const searchVector = searchVectors[queryIndex];
-					if (!searchVector) return [];
+				// Group queries by table for batch processing
+				const queriesByTable = input.queries.reduce(
+					(acc, query, queryIndex) => {
+						const searchVector = searchVectors[queryIndex];
+						if (!searchVector) return acc;
 
-					const tableName = query.table.replace("text2sql_", "");
-					const collectionName = `${env.QDRANT_DEFAULT_COLLECTION}-${tableName}`;
-
-					return query.fields.map(async (field) => {
-						try {
-							console.log(`[VectorSearch] 搜索 ${collectionName}.${field}`);
-
-							// 检查集合是否存在
-							const exists =
-								await qdrantService.collectionExists(collectionName);
-							if (!exists) {
-								console.warn(`[VectorSearch] 集合 ${collectionName} 不存在`);
-								return [];
+						const tableName = query.table.replace("text2sql_", "");
+						if (!acc[tableName]) {
+							acc[tableName] = [];
+						}
+						acc[tableName].push({ ...query, searchVector, queryIndex });
+						return acc;
+					},
+					{} as Record<
+						string,
+						Array<
+							(typeof input.queries)[0] & {
+								searchVector: number[];
+								queryIndex: number;
 							}
+						>
+					>,
+				);
 
-							// 检查字段是否存在
-							const collectionInfo = await qdrantService
-								.getClient()
-								.getCollection(collectionName);
-							const vectorFields = Object.keys(
-								collectionInfo.config.params.vectors || {},
-							);
+				// Process each table's queries in parallel
+				const tableSearchPromises = Object.entries(queriesByTable).map(
+					async ([tableName, tableQueries]) => {
+						const collectionName = `${env.QDRANT_DEFAULT_COLLECTION}-${tableName}`;
 
-							if (!vectorFields.includes(field)) {
-								console.warn(`[VectorSearch] 字段 ${field} 不存在`);
-								return [];
-							}
-
-							// 执行搜索
-							const results = await qdrantService.search(collectionName, {
-								vectorName: field,
-								vector: searchVector,
-								limit: query.limit,
-								withPayload: true,
-								withVectors: false,
-								hnswEf: input.hnswEf,
-							});
-
-							return results.map((result, idx) => ({
-								id: (result.payload?.companyId as number) || 0,
-								score: result.score || 0,
-								table: query.table,
-								matchedField: field,
-								payload: result.payload as Record<string, unknown>,
-								rank: idx + 1,
-							}));
-						} catch (error) {
-							console.error(`[VectorSearch] 搜索失败 ${field}:`, error);
+						// Check collection existence once per table
+						const exists = await qdrantService.collectionExists(collectionName);
+						if (!exists) {
+							console.warn(`[VectorSearch] 集合 ${collectionName} 不存在`);
 							return [];
 						}
-					});
-				});
+
+						// Get collection info once per table
+						const collectionInfo = await qdrantService
+							.getClient()
+							.getCollection(collectionName);
+						const vectorFields = Object.keys(
+							collectionInfo.config.params.vectors || {},
+						);
+
+						// Process all field searches for this table in parallel
+						const fieldSearchPromises = tableQueries.flatMap((query) => {
+							return query.fields
+								.filter((field) => vectorFields.includes(field))
+								.map(async (field) => {
+									try {
+										console.log(
+											`[VectorSearch] 搜索 ${collectionName}.${field}`,
+										);
+
+										// Execute search
+										const results = await qdrantService.search(collectionName, {
+											vectorName: field,
+											vector: query.searchVector,
+											limit: query.limit,
+											withPayload: true,
+											withVectors: false,
+											hnswEf: input.hnswEf,
+										});
+
+										return results.map((result, idx) => ({
+											id: (result.payload?.companyId as number) || 0,
+											score: result.score || 0,
+											table: query.table,
+											matchedField: field,
+											payload: result.payload as Record<string, unknown>,
+											rank: idx + 1,
+										}));
+									} catch (error) {
+										console.error(`[VectorSearch] 搜索失败 ${field}:`, error);
+										return [];
+									}
+								});
+						});
+
+						const fieldResults = await Promise.all(fieldSearchPromises);
+						return fieldResults.flat();
+					},
+				);
 
 				// 等待所有搜索完成
-				const searchResults = await Promise.all(searchPromises.flat());
+				const searchResults = await Promise.all(tableSearchPromises);
 				const mergedResults = searchResults.flat();
 
 				// 按分数排序并去重

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { cacheManager } from "@/server/lib/cache-manager";
 
 /**
  * Query Analyzer Router - CloudFlare Workflow Step 1
@@ -96,6 +97,25 @@ export const queryAnalyzerRouter = createTRPCRouter({
 			const startTime = Date.now();
 			console.log("[QueryAnalyzer] 开始分析查询:", input.query);
 
+			// Generate cache key
+			const cacheKey = cacheManager.generateCacheKey("query", {
+				query: input.query,
+				schemaHash: input.databaseSchema.substring(0, 100), // Use partial schema for cache key
+				vectorizedFields: input.vectorizedFields,
+			});
+
+			// Check cache first
+			const cached = await cacheManager.getQueryAnalysis(cacheKey);
+			if (cached) {
+				console.log("[QueryAnalyzer] 使用缓存结果");
+				return {
+					success: true,
+					analysis: cached,
+					executionTime: Date.now() - startTime,
+					cached: true,
+				};
+			}
+
 			try {
 				const openai = createOpenAI({
 					apiKey: env.AIHUBMIX_API_KEY,
@@ -140,6 +160,9 @@ export const queryAnalyzerRouter = createTRPCRouter({
 					...analysis,
 				};
 
+				// Cache the result
+				await cacheManager.setQueryAnalysis(cacheKey, result);
+
 				console.log("[QueryAnalyzer] 分析完成:", {
 					strategy: result.routing.strategy,
 					confidence: result.routing.confidence,
@@ -151,6 +174,7 @@ export const queryAnalyzerRouter = createTRPCRouter({
 					success: true,
 					analysis: result,
 					executionTime: Date.now() - startTime,
+					cached: false,
 				};
 			} catch (error) {
 				console.error("[QueryAnalyzer] 分析错误:", error);

@@ -1,3 +1,4 @@
+import { cacheRouter } from "@/server/api/routers/cache";
 import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
@@ -25,6 +26,7 @@ export const appRouter = createTRPCRouter({
 	workflow: workflowOrchestratorRouter,
 
 	// 辅助功能
+	cache: cacheRouter,
 	qdrant: qdrantRouter,
 });
 

@@ -137,6 +137,47 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 								: "失败"}
 					</span>
 					<strong>总耗时:</strong> <span>{wf.metadata?.totalTime || 0}ms</span>
+					{wf.metadata?.cacheHits !== undefined &&
+						wf.metadata.cacheHits > 0 && (
+							<>
+								<strong>缓存命中:</strong>{" "}
+								<span style={{ color: "#4caf50" }}>
+									{wf.metadata.cacheHits} 次
+								</span>
+							</>
+						)}
+					{wf.metadata?.sqlModel && (
+						<>
+							<strong>SQL模型:</strong> <span>{wf.metadata.sqlModel}</span>
+						</>
+					)}
+					{wf.metadata?.sqlDifficulty && (
+						<>
+							<strong>查询难度:</strong>
+							<span
+								style={{
+									color:
+										wf.metadata.sqlDifficulty === "easy"
+											? "#4caf50"
+											: wf.metadata.sqlDifficulty === "hard"
+												? "#ff9800"
+												: wf.metadata.sqlDifficulty === "very_hard"
+													? "#f44336"
+													: "#666",
+								}}
+							>
+								{wf.metadata.sqlDifficulty === "easy"
+									? "简单"
+									: wf.metadata.sqlDifficulty === "hard"
+										? "困难"
+										: wf.metadata.sqlDifficulty === "very_hard"
+											? "非常困难"
+											: wf.metadata.sqlDifficulty === "cached"
+												? "已缓存"
+												: wf.metadata.sqlDifficulty}
+							</span>
+						</>
+					)}
 				</div>
 			</div>
 
@@ -145,41 +186,103 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 				<div style={{ marginBottom: "16px" }}>
 					<h3 style={{ fontSize: "16px", marginBottom: "12px" }}>执行步骤</h3>
 					<div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-						{wf.metadata.steps.map((step, idx) => (
-							<div
-								key={idx}
-								style={{
-									padding: "8px 12px",
-									backgroundColor:
-										step.status === "success"
-											? "#e8f5e9"
-											: step.status === "failed"
-												? "#ffebee"
-												: "#fff3e0",
-									borderRadius: "4px",
-									fontSize: "13px",
-									border: `1px solid ${step.status === "success" ? "#4caf50" : step.status === "failed" ? "#f44336" : "#ff9800"}`,
-								}}
-							>
-								<div style={{ fontWeight: "600" }}>{step.name}</div>
+						{wf.metadata.steps.map((step, idx) => {
+							// Step name mapping for better display
+							const stepDisplayNames: Record<string, string> = {
+								QueryAnalysis: "查询分析",
+								VectorSearch: "向量搜索",
+								SchemaSelection: "Schema选择",
+								SQLBuilding: "SQL构建",
+								SQLExecution: "SQL执行",
+								SQLErrorHandler: "SQL错误处理",
+								SQLExecutionCorrected: "SQL重新执行",
+								ResultFusion: "结果融合",
+							};
+
+							const displayName = stepDisplayNames[step.name] || step.name;
+							const isParallel =
+								(step.name === "VectorSearch" ||
+									step.name === "SchemaSelection") &&
+								wf.strategy === "hybrid";
+
+							return (
 								<div
-									style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}
+									key={idx}
+									style={{
+										padding: "8px 12px",
+										backgroundColor:
+											step.status === "success"
+												? "#e8f5e9"
+												: step.status === "failed"
+													? "#ffebee"
+													: "#fff3e0",
+										borderRadius: "4px",
+										fontSize: "13px",
+										border: `1px solid ${step.status === "success" ? "#4caf50" : step.status === "failed" ? "#f44336" : "#ff9800"}`,
+										position: "relative",
+									}}
 								>
-									{step.time}ms
-								</div>
-								{step.error && (
+									<div style={{ fontWeight: "600" }}>
+										{displayName}
+										{isParallel && (
+											<span
+												style={{
+													fontSize: "10px",
+													marginLeft: "4px",
+													backgroundColor: "#2196f3",
+													color: "white",
+													padding: "1px 4px",
+													borderRadius: "3px",
+													verticalAlign: "middle",
+												}}
+											>
+												并行
+											</span>
+										)}
+										{step.cached && (
+											<span
+												style={{
+													fontSize: "10px",
+													marginLeft: "4px",
+													backgroundColor: "#4caf50",
+													color: "white",
+													padding: "1px 4px",
+													borderRadius: "3px",
+													verticalAlign: "middle",
+												}}
+											>
+												缓存
+											</span>
+										)}
+									</div>
 									<div
 										style={{
 											fontSize: "11px",
-											color: "#d32f2f",
+											color: "#666",
 											marginTop: "2px",
 										}}
 									>
-										{step.error}
+										{step.time}ms
 									</div>
-								)}
-							</div>
-						))}
+									{step.error && (
+										<div
+											style={{
+												fontSize: "11px",
+												color: "#d32f2f",
+												marginTop: "2px",
+												maxWidth: "200px",
+												overflow: "hidden",
+												textOverflow: "ellipsis",
+												whiteSpace: "nowrap",
+											}}
+											title={step.error}
+										>
+											❌ {step.error}
+										</div>
+									)}
+								</div>
+							);
+						})}
 					</div>
 				</div>
 			)}
