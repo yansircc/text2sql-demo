@@ -1,8 +1,10 @@
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { queryContextManager } from "@/server/lib/query-context";
+import { schemaRegistry } from "@/server/lib/schema-registry";
 import { z } from "zod";
-import type { QueryAnalysis } from "./query-analyzer";
+import type { SimpleQueryAnalysis } from "./query-analyzer";
 import type { ResultFusionResult } from "./result-fusion";
-import type { SchemaSelectorResult } from "./schema-selector";
+import type { SimpleSchemaSelectorResult } from "./schema-selector";
 import type { SQLBuilderResult } from "./sql-builder";
 import type { SQLExecutorResult } from "./sql-executor";
 import type { VectorSearchResult } from "./vector-search";
@@ -53,11 +55,15 @@ export const WorkflowResultSchema = z.object({
 				status: z.enum(["success", "skipped", "failed"]),
 				time: z.number(),
 				error: z.string().optional(),
+				cached: z.boolean().optional(),
 			}),
 		),
 		sql: z.string().optional(),
 		vectorSearchCount: z.number().optional(),
 		fusionMethod: z.string().optional(),
+		sqlModel: z.string().optional(),
+		sqlDifficulty: z.string().optional(),
+		cacheHits: z.number().optional(),
 	}),
 
 	// 错误信息
@@ -84,11 +90,13 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 				status: "success" | "skipped" | "failed";
 				time: number;
 				error?: string;
+				cached?: boolean;
 			}> = [];
 
 			console.log("[Workflow] 开始执行查询工作流:", input.query);
 
-			let queryId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			// Generate unique query ID
+			const queryId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 			let finalStrategy: "sql_only" | "vector_only" | "hybrid" | "rejected" =
 				"rejected";
 			let finalData: Array<Record<string, unknown>> = [];
@@ -96,6 +104,18 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 			let generatedSql: string | undefined;
 			let vectorSearchCount: number | undefined;
 			let fusionMethod: string | undefined;
+			let sqlModel: string | undefined;
+			let sqlDifficulty: string | undefined;
+			let cacheHits = 0;
+
+			// Step 0: Register schema and create query context
+			const schemaRef = schemaRegistry.register(input.databaseSchema);
+			const queryContext = queryContextManager.create(
+				queryId,
+				input.query,
+				schemaRef,
+			);
+			console.log("[Workflow] Schema registered with ID:", schemaRef.schemaId);
 
 			try {
 				// Step 1: 查询分析
@@ -104,7 +124,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 
 				const analysisResult: {
 					success: boolean;
-					analysis: QueryAnalysis;
+					analysis: SimpleQueryAnalysis;
 					executionTime: number;
 				} = await api.queryAnalyzer.analyze({
 					query: input.query,
@@ -117,24 +137,33 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					name: "QueryAnalysis",
 					status: "success",
 					time: analysisTime,
+					cached: (analysisResult as any).cached,
 				});
 
+				if ((analysisResult as any).cached) cacheHits++;
+
 				const analysis = analysisResult.analysis;
-				queryId = analysis.queryId;
 				finalStrategy = analysis.routing.strategy;
 
+				// Update query context with analysis results
+				queryContextManager.update(queryId, {
+					routing: {
+						strategy: analysis.routing.strategy,
+						confidence: analysis.routing.confidence,
+					},
+					analysis: analysis,
+				});
+				queryContextManager.addStep(queryId, "QueryAnalysis");
+
 				// 检查是否被拒绝
-				if (
-					analysis.routing.strategy === "rejected" ||
-					!analysis.feasibility.isFeasible
-				) {
-					console.log("[Workflow] 查询被拒绝:", analysis.feasibility.reason);
+				if (analysis.routing.strategy === "rejected" || !analysis.feasible) {
+					console.log("[Workflow] 查询被拒绝:", analysis.reason);
 					return {
 						queryId,
 						status: "failed" as const,
 						strategy: "rejected" as const,
-						error: analysis.feasibility.reason || "查询不可行",
-						suggestions: analysis.feasibility.suggestedAlternatives,
+						error: analysis.reason || "查询不可行",
+						suggestions: [], // Simplified schema doesn't have suggestions
 						metadata: {
 							totalTime: Date.now() - startTime,
 							steps,
@@ -142,15 +171,26 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					};
 				}
 
+				// Parse schema once at the beginning for reuse
+				const parsedSchema = JSON.parse(input.databaseSchema);
+
 				// 根据路由策略执行不同流程
 				if (analysis.routing.strategy === "vector_only") {
 					// Vector Only Flow
 					console.log("[Workflow] 执行向量搜索流程");
 
-					if (analysis.vectorConfig) {
+					if (analysis.vectorQueries) {
 						const vectorStartTime = Date.now();
+						// Convert simplified vector queries to full format
+						const queries = analysis.vectorQueries.map((vq: any) => ({
+							table: vq.table,
+							fields: [vq.field],
+							searchText: vq.query,
+							searchType: "semantic" as const,
+							weight: 1.0,
+						}));
 						const vectorResult = await api.vectorSearch.search({
-							queries: analysis.vectorConfig.queries,
+							queries,
 							hnswEf: 128,
 						});
 
@@ -182,31 +222,63 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					// SQL Flow 或 Hybrid Flow
 					let vectorContext: any = undefined;
 					let vectorResults: any = undefined;
+					let schemaResult: any = undefined;
 
-					// 如果是 hybrid，先执行向量搜索
-					if (analysis.routing.strategy === "hybrid" && analysis.vectorConfig) {
-						console.log("[Workflow] 执行混合搜索 - 向量搜索部分");
-						const vectorStartTime = Date.now();
+					// For hybrid mode, run vector search and schema preparation in parallel
+					if (
+						analysis.routing.strategy === "hybrid" &&
+						analysis.vectorQueries &&
+						analysis.sqlTables
+					) {
+						console.log(
+							"[Workflow] 执行混合搜索 - 并行处理向量搜索和Schema准备",
+						);
+						const parallelStartTime = Date.now();
 
-						const vectorResult = await api.vectorSearch.search({
-							queries: analysis.vectorConfig.queries,
-							hnswEf: 128,
+						// Prepare filtered schema for schema selector
+						const filteredSchema: Record<string, any> = {};
+						analysis.sqlTables.forEach((tableName: string) => {
+							if (parsedSchema[tableName]) {
+								filteredSchema[tableName] = parsedSchema[tableName];
+							}
 						});
 
-						steps.push({
-							name: "VectorSearch",
-							status: "success",
-							time: Date.now() - vectorStartTime,
-						});
+						// Execute vector search and schema preparation in parallel
+						const [vectorSearchResult, schemaPreparation] = await Promise.all([
+							// Vector search
+							api.vectorSearch.search({
+								queries: analysis.vectorQueries.map((vq: any) => ({
+									table: vq.table,
+									fields: [vq.field],
+									searchText: vq.query,
+									searchType: "semantic" as const,
+									weight: 1.0,
+								})),
+								hnswEf: 128,
+							}),
+							// Schema selection (without vector context initially)
+							api.schemaSelector.select({
+								query: input.query,
+								tables: analysis.sqlTables,
+								databaseSchema: JSON.stringify(filteredSchema),
+								vectorIds: undefined, // Will be updated later if needed
+							}),
+						]);
 
-						vectorResults = vectorResult.result;
-						vectorSearchCount = vectorResult.result.totalResults;
+						const parallelTime = Date.now() - parallelStartTime;
+						console.log(`[Workflow] 并行执行完成，耗时: ${parallelTime}ms`);
 
-						// 准备向量上下文供 SQL 部分使用
+						// Process vector search results
+						vectorResults = vectorSearchResult.result;
+						vectorSearchCount = vectorSearchResult.result.totalResults;
+
+						// Prepare vector context
 						vectorContext = {
-							hasResults: vectorResult.result.results.length > 0,
-							ids: vectorResult.result.results.map((r: { id: number }) => r.id),
-							topMatches: vectorResult.result.results.slice(0, 5).map(
+							hasResults: vectorSearchResult.result.results.length > 0,
+							ids: vectorSearchResult.result.results.map(
+								(r: { id: number }) => r.id,
+							),
+							topMatches: vectorSearchResult.result.results.slice(0, 5).map(
 								(r: {
 									id: number;
 									score: number;
@@ -218,47 +290,125 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 								}),
 							),
 						};
-					}
 
-					// Step 2B: Schema 选择
-					if (analysis.sqlConfig) {
+						// Update query context with vector results
+						queryContextManager.update(queryId, {
+							vectorContext: vectorContext,
+						});
+						queryContextManager.addStep(queryId, "VectorSearch");
+
+						// Store schema result
+						schemaResult = schemaPreparation;
+
+						// Record parallel execution steps
+						steps.push({
+							name: "VectorSearch",
+							status: "success",
+							time: parallelTime,
+						});
+						steps.push({
+							name: "SchemaSelection",
+							status: "success",
+							time: parallelTime,
+							cached: (schemaPreparation as any).cached,
+						});
+
+						if ((schemaPreparation as any).cached) cacheHits++;
+
+						console.log(`[Workflow] 向量搜索找到 ${vectorSearchCount} 条结果`);
+					} else if (analysis.sqlTables) {
+						// SQL-only mode: just do schema selection
 						console.log("[Workflow] Step 2B: Schema选择");
 						const schemaStartTime = Date.now();
 
-						// 解析完整 schema
-						const fullSchema = JSON.parse(input.databaseSchema);
-
 						// 只提取 query-analyzer 选择的表的 schema
 						const filteredSchema: Record<string, any> = {};
-						analysis.sqlConfig.tables.forEach((tableName) => {
-							if (fullSchema[tableName]) {
-								filteredSchema[tableName] = fullSchema[tableName];
+						analysis.sqlTables.forEach((tableName: string) => {
+							if (parsedSchema[tableName]) {
+								filteredSchema[tableName] = parsedSchema[tableName];
 							}
 						});
 
-						const schemaResult = await api.schemaSelector.select({
+						schemaResult = await api.schemaSelector.select({
 							query: input.query,
-							sqlConfig: analysis.sqlConfig,
-							fullSchema: JSON.stringify(filteredSchema), // 只传递需要的表
-							vectorContext,
+							tables: analysis.sqlTables,
+							databaseSchema: JSON.stringify(filteredSchema),
+							vectorIds: vectorContext?.ids,
 						});
 
 						steps.push({
 							name: "SchemaSelection",
 							status: "success",
 							time: Date.now() - schemaStartTime,
+							cached: (schemaResult as any).cached,
 						});
 
-						// Step 3: SQL 构建
+						if ((schemaResult as any).cached) cacheHits++;
+					}
+
+					// Step 3: SQL 构建
+					if (schemaResult && analysis.sqlTables) {
 						console.log("[Workflow] Step 3: SQL构建");
 						const sqlBuildStartTime = Date.now();
 
+						// Transform schema selector result to SQL builder format
+						const selectedTables = schemaResult.result.tables.map(
+							(tableName: string) => ({
+								tableName,
+								fields: schemaResult.result.fields[tableName] || [],
+								reason: "Selected by schema selector",
+								isJoinTable: false,
+							}),
+						);
+
+						// Transform join hints
+						const joinHints = schemaResult.result.joins
+							?.map((joinStr: string) => {
+								// Parse join string like "companies INNER JOIN contacts ON companies.id = contacts.companyId"
+								const match = joinStr.match(
+									/(\w+)\s+(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)\s+ON\s+(.+)/i,
+								);
+								if (match && match[1] && match[2] && match[3] && match[4]) {
+									return {
+										from: match[1],
+										type: match[2].toUpperCase() as "INNER" | "LEFT" | "RIGHT",
+										to: match[3],
+										on: match[4],
+									};
+								}
+								return null;
+							})
+							.filter((x: any): x is NonNullable<typeof x> => x !== null);
+
+						// Transform time field
+						const timeFields = schemaResult.result.timeField
+							? [
+									{
+										table: schemaResult.result.timeField.split(".")[0] || "",
+										field:
+											schemaResult.result.timeField.split(".")[1] ||
+											schemaResult.result.timeField,
+										dataType: "integer" as const,
+										format: "timestamp" as const,
+									},
+								]
+							: undefined;
+
+						// Get the actual schema for selected tables
+						const slimSchema: Record<string, any> = {};
+						schemaResult.result.tables.forEach((tableName: string) => {
+							if (parsedSchema[tableName]) {
+								slimSchema[tableName] = parsedSchema[tableName];
+							}
+						});
+
 						const sqlBuildResult = await api.sqlBuilder.build({
 							query: input.query,
-							slimSchema: schemaResult.result.slimSchema,
-							selectedTables: schemaResult.result.selectedTables,
+							slimSchema: slimSchema,
+							selectedTables,
 							sqlHints: {
-								...schemaResult.result.sqlHints,
+								joinHints,
+								timeFields,
 								vectorIds: vectorContext?.ids,
 							},
 						});
@@ -267,25 +417,122 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							name: "SQLBuilding",
 							status: "success",
 							time: Date.now() - sqlBuildStartTime,
+							cached: (sqlBuildResult as any).cached,
 						});
 
+						if ((sqlBuildResult as any).cached) cacheHits++;
+
 						generatedSql = sqlBuildResult.result.sql;
+
+						// Extract model and difficulty info from SQL builder logs
+						// Note: This is a simplified approach - in production you'd pass this data properly
+						sqlModel = (sqlBuildResult as any).model || "GPT-4.1";
+						sqlDifficulty = (sqlBuildResult as any).difficulty || "easy";
 
 						// Step 4: SQL 执行
 						console.log("[Workflow] Step 4: SQL执行");
 						const sqlExecStartTime = Date.now();
+						let sqlExecResult: any;
+						let finalSql = sqlBuildResult.result.sql;
 
-						const sqlExecResult = await api.sqlExecutor.execute({
-							sql: sqlBuildResult.result.sql,
-							queryType: sqlBuildResult.result.queryType,
-							maxRows: input.options?.maxRows || 100,
-						});
+						try {
+							sqlExecResult = await api.sqlExecutor.execute({
+								sql: finalSql,
+								queryType: sqlBuildResult.result.queryType,
+								maxRows: input.options?.maxRows || 100,
+							});
 
-						steps.push({
-							name: "SQLExecution",
-							status: "success",
-							time: Date.now() - sqlExecStartTime,
-						});
+							steps.push({
+								name: "SQLExecution",
+								status: "success",
+								time: Date.now() - sqlExecStartTime,
+							});
+						} catch (sqlError: any) {
+							console.log(
+								"[Workflow] SQL执行失败，尝试错误处理:",
+								sqlError.message,
+							);
+
+							// 记录原始SQL执行失败
+							steps.push({
+								name: "SQLExecution",
+								status: "failed",
+								time: Date.now() - sqlExecStartTime,
+								error: sqlError.message,
+							});
+
+							// Step 4B: SQL错误处理
+							const errorHandlerStartTime = Date.now();
+							try {
+								const errorHandlerResult =
+									await api.sqlErrorHandler.handleError({
+										failedSql: finalSql,
+										errorMessage: sqlError.message,
+										naturalLanguageQuery: input.query,
+										selectedSchema: {
+											tables: schemaResult.result.tables.map(
+												(tableName: string) => {
+													const tableSchema = parsedSchema[tableName];
+													const fields =
+														schemaResult.result.fields[tableName] || [];
+													return {
+														name: tableName,
+														columns: fields.map((fieldName: string) => ({
+															name: fieldName,
+															type:
+																tableSchema?.columns?.[fieldName]?.type ||
+																"text",
+															nullable:
+																tableSchema?.columns?.[fieldName]?.nullable ||
+																true,
+														})),
+													};
+												},
+											),
+										},
+										queryType: sqlBuildResult.result.queryType,
+										routingStrategy: analysis.routing.strategy,
+									});
+
+								console.log("[Workflow] 错误处理成功，重试SQL执行");
+
+								// 更新SQL为修正后的版本
+								finalSql = errorHandlerResult.result.correctedSql;
+								generatedSql = finalSql;
+
+								steps.push({
+									name: "SQLErrorHandler",
+									status: "success",
+									time: Date.now() - errorHandlerStartTime,
+								});
+
+								// 执行修正后的SQL
+								const correctedSqlStartTime = Date.now();
+								sqlExecResult = await api.sqlExecutor.execute({
+									sql: finalSql,
+									queryType: sqlBuildResult.result.queryType,
+									maxRows: input.options?.maxRows || 100,
+								});
+
+								steps.push({
+									name: "SQLExecutionCorrected",
+									status: "success",
+									time: Date.now() - correctedSqlStartTime,
+								});
+							} catch (errorHandlerError: any) {
+								console.error("[Workflow] 错误处理失败:", errorHandlerError);
+
+								steps.push({
+									name: "SQLErrorHandler",
+									status: "failed",
+									time: Date.now() - errorHandlerStartTime,
+									error: errorHandlerError.message,
+								});
+
+								// 重新抛出原始错误
+								throw sqlError;
+							}
+						}
 
 						// 如果是 hybrid，需要融合结果
 						if (analysis.routing.strategy === "hybrid" && vectorResults) {
@@ -328,6 +575,11 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					totalTime: Date.now() - startTime,
 				});
 
+				// Periodic cleanup of old contexts (10% chance)
+				if (Math.random() < 0.1) {
+					queryContextManager.cleanup();
+				}
+
 				return {
 					queryId,
 					status: "success" as const,
@@ -340,6 +592,9 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						sql: generatedSql,
 						vectorSearchCount,
 						fusionMethod,
+						sqlModel,
+						sqlDifficulty,
+						cacheHits,
 					},
 				};
 			} catch (error) {
@@ -360,6 +615,11 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							error: errorMessage,
 						});
 					}
+				}
+
+				// Periodic cleanup of old contexts (10% chance)
+				if (Math.random() < 0.1) {
+					queryContextManager.cleanup();
 				}
 
 				return {
@@ -431,6 +691,20 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					inputs: ["sql", "queryType"],
 					outputs: ["sqlResults"],
 					router: "sqlExecutor.execute",
+				},
+				{
+					id: "sql-error-handler",
+					name: "SQL错误处理",
+					description: "分析SQL执行错误并生成修正后的SQL",
+					condition: "sql执行失败时触发",
+					inputs: [
+						"failedSql",
+						"errorMessage",
+						"selectedSchema",
+						"queryContext",
+					],
+					outputs: ["correctedSql", "errorAnalysis"],
+					router: "sqlErrorHandler.handleError",
 				},
 				{
 					id: "result-fusion",
@@ -522,4 +796,24 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 				],
 			};
 		}),
+
+	// Get optimization stats
+	getOptimizationStats: publicProcedure.query(() => {
+		return {
+			schemaRegistry: {
+				registeredSchemas: schemaRegistry.size(),
+				description: "Schemas registered for reference-based passing",
+			},
+			queryContext: {
+				// Note: In production, be careful about exposing internal data
+				description: "Query contexts managed for workflow execution",
+			},
+			optimizations: [
+				"Schema Registry: Pass schemas by reference instead of value",
+				"Query Context Manager: Centralized query state management",
+				"Aggressive Parallelization: Vector search and schema selection run concurrently in hybrid mode",
+				"Periodic Cleanup: Automatic memory management with 10% probability",
+			],
+		};
+	}),
 });

@@ -20,6 +20,10 @@ export const env = createEnv({
 			(val) => Number(val),
 			z.number().int().min(1, "Embedding dimension is required"),
 		),
+		ENABLE_QUERY_CACHE: z
+			.string()
+			.transform((val) => val === "true")
+			.default("false"),
 		NODE_ENV: z
 			.enum(["development", "test", "production"])
 			.default("development"),
@@ -47,6 +51,7 @@ export const env = createEnv({
 		QDRANT_DEFAULT_COLLECTION: process.env.QDRANT_DEFAULT_COLLECTION,
 		EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
 		EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION,
+		ENABLE_QUERY_CACHE: process.env.ENABLE_QUERY_CACHE,
 		NODE_ENV: process.env.NODE_ENV,
 		// NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
 	},

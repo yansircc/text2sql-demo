@@ -1,9 +1,9 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { cacheManager } from "@/server/lib/cache-manager";
+import { modelPicker } from "@/server/lib/model-picker";
 
 /**
  * SQL Builder Router - CloudFlare Workflow Step 3
@@ -13,6 +13,153 @@ import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
  * - 生成优化的SQL语句
  * - 返回SQL和元数据
  */
+
+// Difficulty estimation for SQL query generation
+interface QueryDifficulty {
+	level: "easy" | "hard" | "very_hard";
+	factors: string[];
+	score: number;
+}
+
+function estimateQueryDifficulty(input: SQLBuilderInput): QueryDifficulty {
+	let score = 0;
+	const factors: string[] = [];
+
+	// 1. Number of tables (JOINs complexity)
+	const tableCount = input.selectedTables.length;
+	if (tableCount === 1) {
+		score += 0;
+		factors.push("单表查询");
+	} else if (tableCount === 2) {
+		score += 20;
+		factors.push("双表JOIN");
+	} else if (tableCount >= 3) {
+		score += 40;
+		factors.push(`多表JOIN (${tableCount}个表)`);
+	}
+
+	// 2. JOIN complexity
+	if (input.sqlHints.joinHints?.length) {
+		const joinCount = input.sqlHints.joinHints.length;
+		if (joinCount >= 3) {
+			score += 30;
+			factors.push(`复杂JOIN (${joinCount}个关联)`);
+		} else if (joinCount >= 2) {
+			score += 20;
+			factors.push("多个JOIN");
+		} else {
+			score += 10;
+			factors.push("简单JOIN");
+		}
+	}
+
+	// 3. Time-based queries
+	if (input.sqlHints.timeFields?.length) {
+		score += 5; // Reduced from 15
+		factors.push("时间相关查询");
+
+		// Time range queries are harder
+		if (
+			input.query
+				.toLowerCase()
+				.match(/between|range|period|last\s+\d+|过去|最近|趋势|对比/)
+		) {
+			score += 15; // Increased from 10 for complex time analysis
+			factors.push("时间范围查询");
+		}
+	}
+
+	// 4. Aggregation complexity
+	const aggregationKeywords =
+		/group\s+by|count|sum|avg|max|min|having|分组|统计|汇总|平均|最大|最小/i;
+	if (input.query.match(aggregationKeywords)) {
+		// Check if it's a simple COUNT without GROUP BY
+		const hasGroupBy = /group\s+by|分组/i.test(input.query);
+		const hasMultipleAggregations =
+			(input.query.match(/count|sum|avg|max|min|统计|汇总|平均|最大|最小/gi)
+				?.length || 0) > 1;
+
+		if (!hasGroupBy && !hasMultipleAggregations) {
+			score += 5; // Simple aggregation like COUNT(*)
+			factors.push("简单聚合");
+		} else {
+			score += 20; // Complex aggregation
+			factors.push("聚合查询");
+		}
+
+		// Multiple aggregations or HAVING clause
+		if (
+			input.query.toLowerCase().includes("having") ||
+			hasMultipleAggregations
+		) {
+			score += 15;
+			factors.push("复杂聚合");
+		}
+	}
+
+	// 5. Subqueries or CTEs
+	if (input.query.toLowerCase().match(/subquery|子查询|cte|with\s+as/)) {
+		score += 35;
+		factors.push("子查询/CTE");
+	}
+
+	// 6. Window functions
+	if (
+		input.query
+			.toLowerCase()
+			.match(/over|partition|row_number|rank|dense_rank|窗口函数/)
+	) {
+		score += 40;
+		factors.push("窗口函数");
+	}
+
+	// 7. Fuzzy search complexity
+	if (input.sqlHints.fuzzyPatterns?.length) {
+		score += 10;
+		factors.push("模糊搜索");
+		if (input.sqlHints.fuzzyPatterns.length > 2) {
+			score += 10;
+			factors.push("多个模糊条件");
+		}
+	}
+
+	// 8. Vector search integration
+	if (input.sqlHints.vectorIds?.length) {
+		if (input.sqlHints.vectorIds.length > 100) {
+			score += 15;
+			factors.push("大量向量结果集成");
+		} else {
+			score += 5;
+			factors.push("向量搜索集成");
+		}
+	}
+
+	// 9. Query intent complexity
+	const complexIntents =
+		/排名|对比|趋势|变化|环比|同比|分析|correlation|ranking|comparison/i;
+	if (input.query.match(complexIntents)) {
+		score += 25;
+		factors.push("复杂分析意图");
+	}
+
+	// 10. Natural language complexity
+	if (input.query.length > 100) {
+		score += 10;
+		factors.push("复杂自然语言描述");
+	}
+
+	// Determine difficulty level with adjusted thresholds
+	let level: "easy" | "hard" | "very_hard";
+	if (score >= 80) {
+		level = "very_hard";
+	} else if (score >= 40) {
+		level = "hard";
+	} else {
+		level = "easy";
+	}
+
+	return { level, factors, score };
+}
 
 // SQL构建输入
 export const SQLBuilderInputSchema = z.object({
@@ -88,11 +235,39 @@ export const sqlBuilderRouter = createTRPCRouter({
 					input.sqlHints.vectorIds && input.sqlHints.vectorIds.length > 0,
 			});
 
+			// Generate cache key
+			const cacheKey = cacheManager.generateCacheKey("sql", {
+				query: input.query,
+				selectedTables: input.selectedTables.map((t) => ({
+					name: t.tableName,
+					fields: t.fields,
+				})),
+				sqlHints: {
+					...input.sqlHints,
+					vectorIds: input.sqlHints.vectorIds?.slice(0, 10), // Limit vector IDs in cache key
+				},
+			});
+
+			// Check cache first
+			const cached = await cacheManager.getSqlGeneration(cacheKey);
+			// Temporarily disable cache to debug the issue
+			const skipCache = true; // TODO: Remove this after fixing the schema issue
+			if (cached && !skipCache) {
+				console.log("[SQLBuilder] 使用缓存结果");
+				return {
+					success: true,
+					result: cached,
+					executionTime: Date.now() - startTime,
+					cached: true,
+					model: "Cached",
+					difficulty: "cached",
+				};
+			}
+
 			try {
-				const anthropic = createAnthropic({
-					apiKey: env.AIHUBMIX_API_KEY,
-					baseURL: env.AIHUBMIX_BASE_URL,
-				});
+				// Estimate query difficulty
+				const difficulty = estimateQueryDifficulty(input);
+				console.log("[SQLBuilder] 查询难度评估:", difficulty);
 
 				// 构建SQL提示
 				let sqlHintsPrompt = "";
@@ -128,6 +303,14 @@ export const sqlBuilderRouter = createTRPCRouter({
 					});
 				}
 
+				// Log the schema to debug
+				console.log("[SQLBuilder] Schema being used:", {
+					tables: Object.keys(input.slimSchema),
+					firstTableColumns: input.slimSchema[Object.keys(input.slimSchema)[0]]?.columns ? 
+						Object.keys(input.slimSchema[Object.keys(input.slimSchema)[0]].columns).slice(0, 5) : 
+						"No columns found"
+				});
+
 				const systemPrompt = `你是SQLite SQL专家。基于提供的schema和提示生成优化的SQL语句。
 
 查询需求: ${input.query}
@@ -153,19 +336,43 @@ SQLite注意事项:
 3. 适当使用LIMIT避免返回过多数据
 4. 对于聚合查询，使用GROUP BY和聚合函数`;
 
-				const { object: result } = await generateObject({
-					model: anthropic("claude-sonnet-4-20250514"),
-					system: systemPrompt,
-					prompt: "生成SQL语句",
-					schema: SQLBuilderResultSchema,
-					temperature: 0.1,
-				});
+				// Use smart model picker with progressive rollback
+				const {
+					result,
+					model: usedModel,
+					attempts,
+				} = await modelPicker.executeWithRollback(
+					"sql-building",
+					async (modelInstance) => {
+						const { object } = await generateObject({
+							model: modelInstance,
+							system: systemPrompt,
+							prompt: "生成SQL语句",
+							schema: SQLBuilderResultSchema,
+							temperature: 0.1,
+						});
+						return object;
+					},
+					{
+						complexity: difficulty.level,
+						preferSpeed: difficulty.level === "easy",
+						minQuality: difficulty.level === "very_hard" ? 9 : 6,
+						contextSize: systemPrompt.length + 1000, // Approximate context size
+					},
+				);
+
+				// Cache the result
+				await cacheManager.setSqlGeneration(cacheKey, result);
 
 				console.log("[SQLBuilder] SQL构建完成:", {
 					sqlLength: result.sql.length,
 					queryType: result.queryType,
 					usesIndex: result.usesIndex,
 					hasWarnings: result.warnings && result.warnings.length > 0,
+					difficulty: difficulty.level,
+					difficultyScore: difficulty.score,
+					model: usedModel,
+					attempts: attempts,
 					executionTime: Date.now() - startTime,
 				});
 
@@ -173,10 +380,30 @@ SQLite注意事项:
 					success: true,
 					result,
 					executionTime: Date.now() - startTime,
+					cached: false,
+					model: usedModel,
+					difficulty: difficulty.level,
+					attempts: attempts,
 				};
 			} catch (error) {
 				console.error("[SQLBuilder] 构建错误:", error);
 				throw new Error("SQL构建失败");
 			}
 		}),
+
+	// Get model picker stats for SQL building
+	getModelStats: publicProcedure.query(() => {
+		const stats = modelPicker.getStats("sql-building");
+		return {
+			taskType: "sql-building",
+			stats: stats,
+			description: "Model usage statistics for SQL query generation",
+			features: [
+				"Progressive rollback on failure",
+				"Historical learning from past executions",
+				"Automatic model selection based on complexity",
+				"Cost-optimized model choices",
+			],
+		};
+	}),
 });

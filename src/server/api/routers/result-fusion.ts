@@ -34,20 +34,21 @@ export const resultFusionRouter = createTRPCRouter({
 	fuse: publicProcedure
 		.input(ResultFusionInputSchema)
 		.mutation(async ({ input }) => {
-			const startTime = Date.now();
-			console.log("[ResultFusion] 开始AI融合:", {
-				query: input.userQuery.substring(0, 50) + "...",
-				vectorCount: input.vectorResults?.length || 0,
-				sqlCount: input.sqlResults?.length || 0,
-			});
+			try {
+				const startTime = Date.now();
+				console.log("[ResultFusion] 开始AI融合:", {
+					query: input.userQuery.substring(0, 50) + "...",
+					vectorCount: input.vectorResults?.length || 0,
+					sqlCount: input.sqlResults?.length || 0,
+				});
 
-			const openai = createOpenAI({
-				apiKey: env.AIHUBMIX_API_KEY,
-				baseURL: env.AIHUBMIX_BASE_URL,
-			});
+				const openai = createOpenAI({
+					apiKey: env.AIHUBMIX_API_KEY,
+					baseURL: env.AIHUBMIX_BASE_URL,
+				});
 
-			// 构建简洁的提示词
-			const systemPrompt = `你是数据融合专家。基于用户查询和搜索结果，返回最相关的数据。
+				// 构建简洁的提示词
+				const systemPrompt = `你是数据融合专家。基于用户查询和搜索结果，返回最相关的数据。
 
 用户查询: ${input.userQuery}
 
@@ -79,23 +80,27 @@ ${input.sqlResults ? JSON.stringify(input.sqlResults.slice(0, 5), null, 2) : "�
 - results 数组中的每个对象保持原始数据结构
 - 不要添加额外的嵌套层级`;
 
-			const { object: result } = await generateObject({
-				model: openai("gpt-4.1"),
-				system: systemPrompt,
-				prompt: "生成融合结果",
-				schema: AIFusionResultSchema,
-				temperature: 0.1,
-			});
+				const { object: result } = await generateObject({
+					model: openai("gpt-4.1"),
+					system: systemPrompt,
+					prompt: "生成融合结果",
+					schema: AIFusionResultSchema,
+					temperature: 0.1,
+				});
 
-			console.log("[ResultFusion] AI融合完成:", {
-				resultCount: result.results.length,
-				executionTime: Date.now() - startTime,
-			});
+				console.log("[ResultFusion] AI融合完成:", {
+					resultCount: result.results.length,
+					executionTime: Date.now() - startTime,
+				});
 
-			return {
-				success: true,
-				results: result.results,
-				count: result.results.length,
-			};
+				return {
+					success: true,
+					results: result.results,
+					count: result.results.length,
+				};
+			} catch (error) {
+				console.error("[ResultFusion] 融合失败:", error);
+				throw new Error("结果融合失败");
+			}
 		}),
 });

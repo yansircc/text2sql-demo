@@ -1,11 +1,15 @@
+import { cacheRouter } from "@/server/api/routers/cache";
+import { pipelineComparisonRouter } from "@/server/api/routers/pipeline-comparison";
 import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
 import { schemaSelectorRouter } from "@/server/api/routers/schema-selector";
 import { sqlBuilderRouter } from "@/server/api/routers/sql-builder";
+import { sqlErrorHandlerRouter } from "@/server/api/routers/sql-error-handler";
 import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
 import { vectorSearchRouter } from "@/server/api/routers/vector-search";
 import { workflowOrchestratorRouter } from "@/server/api/routers/workflow-orchestrator";
+import { workflowOrchestratorOptimizedRouter } from "@/server/api/routers/workflow-orchestrator-optimized";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -19,10 +23,16 @@ export const appRouter = createTRPCRouter({
 	schemaSelector: schemaSelectorRouter,
 	sqlBuilder: sqlBuilderRouter,
 	sqlExecutor: sqlExecutorRouter,
+	sqlErrorHandler: sqlErrorHandlerRouter,
 	resultFusion: resultFusionRouter,
 	workflow: workflowOrchestratorRouter,
+	workflowOptimized: workflowOrchestratorOptimizedRouter,
+
+	// 测试与比较
+	pipelineComparison: pipelineComparisonRouter,
 
 	// 辅助功能
+	cache: cacheRouter,
 	qdrant: qdrantRouter,
 });
 
