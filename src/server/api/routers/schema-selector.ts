@@ -20,7 +20,7 @@ export const SimpleSchemaSelectorResultSchema = z.object({
 	tables: z.array(z.string()),
 	fields: z.record(z.array(z.string())),
 	joins: z.array(z.string()).optional(),
-	timeField: z.string().optional(),
+	timeField: z.string().nullable().optional(),
 });
 
 export type SimpleSchemaSelectorResult = z.infer<
@@ -112,8 +112,8 @@ ${schemaContext}
 只返回:
 1. tables: 使用的表名
 2. fields: 每个表需要的字段 {"table1": ["field1", "field2"]}
-3. joins: JOIN语句列表 (如需要)
-4. timeField: 时间字段 (如需要)
+3. joins: JOIN语句列表 (如需要，可选)
+4. timeField: 时间字段 (如需要，可选，如果没有时间字段则为null)
 
 选择原则:
 - 只选必要字段
