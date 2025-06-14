@@ -33,7 +33,7 @@ export const sqlBuilderRouter = createTRPCRouter({
 				tables: z.array(z.string()),
 				fields: z.record(z.array(z.string())),
 				joins: z.array(z.string()).optional(),
-				timeField: z.string().optional(),
+				timeField: z.string().nullable().optional(),
 				vectorIds: z.array(z.number()).optional(),
 				difficulty: z.enum(["easy", "hard"]).default("easy"),
 			}),
