@@ -39,7 +39,8 @@ describe("resultFusionRouter", () => {
 						revenue: 50000000,
 						description: "Leading electric vehicle manufacturer",
 					},
-					explanation: "High relevance due to exact match in SQL and semantic similarity",
+					explanation:
+						"High relevance due to exact match in SQL and semantic similarity",
 				},
 				{
 					id: 2,
@@ -180,7 +181,8 @@ describe("resultFusionRouter", () => {
 					data: {
 						id: 10,
 						title: "Introduction to Machine Learning",
-						content: "Machine learning is a subset of artificial intelligence...",
+						content:
+							"Machine learning is a subset of artificial intelligence...",
 					},
 					explanation: "High semantic similarity to query",
 				},
@@ -202,7 +204,8 @@ describe("resultFusionRouter", () => {
 					payload: {
 						id: 10,
 						title: "Introduction to Machine Learning",
-						content: "Machine learning is a subset of artificial intelligence...",
+						content:
+							"Machine learning is a subset of artificial intelligence...",
 					},
 					rank: 1,
 				},
@@ -277,7 +280,8 @@ describe("resultFusionRouter", () => {
 						price: 999,
 						in_stock: true,
 					},
-					explanation: "Found in both SQL (exact match) and vector search (high similarity)",
+					explanation:
+						"Found in both SQL (exact match) and vector search (high similarity)",
 				},
 				{
 					id: 2,
@@ -442,22 +446,25 @@ describe("resultFusionRouter", () => {
 		expect(result.count).toBe(20);
 	});
 
-	test("fuse should handle errors gracefully", withSuppressedConsoleError(async () => {
-		// Clear any previous mock implementations
-		mockGenerateObject.mockReset();
-		mockGenerateObject.mockImplementation(() => 
-			Promise.reject(new Error("AI service unavailable"))
-		);
+	test(
+		"fuse should handle errors gracefully",
+		withSuppressedConsoleError(async () => {
+			// Clear any previous mock implementations
+			mockGenerateObject.mockReset();
+			mockGenerateObject.mockImplementation(() =>
+				Promise.reject(new Error("AI service unavailable")),
+			);
 
-		const caller = resultFusionRouter.createCaller(createTestContext());
+			const caller = resultFusionRouter.createCaller(createTestContext());
 
-		await expect(
-			caller.fuse({
-				userQuery: "Test query",
-				maxResults: 10,
-			})
-		).rejects.toThrow("结果融合失败");
-	}));
+			await expect(
+				caller.fuse({
+					userQuery: "Test query",
+					maxResults: 10,
+				}),
+			).rejects.toThrow("结果融合失败");
+		}),
+	);
 
 	test("fuse should work with custom scoring and explanations", async () => {
 		const mockFusedResults = {
@@ -476,7 +483,8 @@ describe("resultFusionRouter", () => {
 							recency: 1.0,
 						},
 					},
-					explanation: "High relevance: recent document with strong keyword and semantic matches",
+					explanation:
+						"High relevance: recent document with strong keyword and semantic matches",
 				},
 			],
 			count: 1,

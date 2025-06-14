@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { schemaSelectorRouter } from "../schema-selector";
-import { createTestContext, withSuppressedConsoleError } from "./test-helpers";
 import { correctSchemaSelectorMock } from "./correct-mock-data";
+import { createTestContext, withSuppressedConsoleError } from "./test-helpers";
 
 // Create mock function
 const mockGenerateObject = jest.fn(() => Promise.resolve({ object: {} }));
@@ -37,7 +37,9 @@ describe("schemaSelectorRouter", () => {
 	});
 
 	test("select should choose relevant tables and fields for simple query", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctSchemaSelectorMock.simple });
+		mockGenerateObject.mockResolvedValue({
+			object: correctSchemaSelectorMock.simple,
+		});
 
 		const caller = schemaSelectorRouter.createCaller(createTestContext());
 		const result = await caller.select({
@@ -61,13 +63,19 @@ describe("schemaSelectorRouter", () => {
 
 		expect(result.success).toBe(true);
 		expect(mockGenerateObject).toHaveBeenCalledTimes(1);
-		expect(result.result.selectedTables).toEqual(correctSchemaSelectorMock.simple.selectedTables);
-		expect(result.result.sqlHints).toEqual(correctSchemaSelectorMock.simple.sqlHints);
+		expect(result.result.selectedTables).toEqual(
+			correctSchemaSelectorMock.simple.selectedTables,
+		);
+		expect(result.result.sqlHints).toEqual(
+			correctSchemaSelectorMock.simple.sqlHints,
+		);
 		expect(result.executionTime).toBeGreaterThanOrEqual(0);
 	});
 
 	test("select should handle multi-table joins", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctSchemaSelectorMock.multiTable });
+		mockGenerateObject.mockResolvedValue({
+			object: correctSchemaSelectorMock.multiTable,
+		});
 
 		const caller = schemaSelectorRouter.createCaller(createTestContext());
 		const result = await caller.select({
@@ -104,7 +112,9 @@ describe("schemaSelectorRouter", () => {
 	});
 
 	test("select should handle vector context for hybrid queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctSchemaSelectorMock.withVectorContext });
+		mockGenerateObject.mockResolvedValue({
+			object: correctSchemaSelectorMock.withVectorContext,
+		});
 
 		const caller = schemaSelectorRouter.createCaller(createTestContext());
 		const result = await caller.select({
@@ -156,28 +166,31 @@ describe("schemaSelectorRouter", () => {
 		expect(result.result.compressionRatio).toBeGreaterThan(0);
 	});
 
-	test("select should handle errors gracefully", withSuppressedConsoleError(async () => {
-		// Set flag to throw error
-		shouldThrow = true;
+	test(
+		"select should handle errors gracefully",
+		withSuppressedConsoleError(async () => {
+			// Set flag to throw error
+			shouldThrow = true;
 
-		const caller = schemaSelectorRouter.createCaller(createTestContext());
+			const caller = schemaSelectorRouter.createCaller(createTestContext());
 
-		await expect(
-			caller.select({
-				query: "Show orders",
-				sqlConfig: {
-					tables: ["orders"],
-					canUseFuzzySearch: false,
-					estimatedComplexity: "simple" as const,
-				},
-				fullSchema: JSON.stringify({
-					orders: {
-						properties: {
-							id: { type: "INTEGER", nullable: false },
-						},
+			await expect(
+				caller.select({
+					query: "Show orders",
+					sqlConfig: {
+						tables: ["orders"],
+						canUseFuzzySearch: false,
+						estimatedComplexity: "simple" as const,
 					},
+					fullSchema: JSON.stringify({
+						orders: {
+							properties: {
+								id: { type: "INTEGER", nullable: false },
+							},
+						},
+					}),
 				}),
-			}),
-		).rejects.toThrow("Schema选择失败");
-	}));
+			).rejects.toThrow("Schema选择失败");
+		}),
+	);
 });

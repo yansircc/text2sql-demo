@@ -3,6 +3,7 @@ import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
 import { schemaSelectorRouter } from "@/server/api/routers/schema-selector";
 import { sqlBuilderRouter } from "@/server/api/routers/sql-builder";
+import { sqlErrorHandlerRouter } from "@/server/api/routers/sql-error-handler";
 import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
 import { vectorSearchRouter } from "@/server/api/routers/vector-search";
 import { workflowOrchestratorRouter } from "@/server/api/routers/workflow-orchestrator";
@@ -19,6 +20,7 @@ export const appRouter = createTRPCRouter({
 	schemaSelector: schemaSelectorRouter,
 	sqlBuilder: sqlBuilderRouter,
 	sqlExecutor: sqlExecutorRouter,
+	sqlErrorHandler: sqlErrorHandlerRouter,
 	resultFusion: resultFusionRouter,
 	workflow: workflowOrchestratorRouter,
 

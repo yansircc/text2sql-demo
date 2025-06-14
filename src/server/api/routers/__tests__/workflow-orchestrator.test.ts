@@ -158,7 +158,7 @@ describe("workflowOrchestratorRouter", () => {
 				routing: {
 					strategy: "vector_only",
 					reason: "Semantic search required",
-					confidence: 0.90,
+					confidence: 0.9,
 				},
 				vectorConfig: {
 					queries: [
@@ -467,54 +467,59 @@ describe("workflowOrchestratorRouter", () => {
 		expect(result.metadata.steps).toHaveLength(1); // Only QueryAnalysis
 	});
 
-	test("execute should handle workflow errors gracefully", withSuppressedConsoleError(async () => {
-		// Mock query analysis to succeed
-		mockApiCaller.queryAnalyzer.analyze.mockResolvedValue({
-			success: true,
-			analysis: {
-				queryId: "test-error",
-				originalQuery: "Show all data",
-				timestamp: new Date().toISOString(),
-				feasibility: { isFeasible: true },
-				clarity: { isClear: true },
-				routing: {
-					strategy: "sql_only",
-					reason: "Simple query",
-					confidence: 0.90,
-				},
-				sqlConfig: {
-					tables: ["test_table"],
-					canUseFuzzySearch: false,
-					estimatedComplexity: "simple",
-				},
-			},
-			executionTime: 100,
-		});
-
-		// Mock schema selection to fail
-		mockApiCaller.schemaSelector.select.mockReset();
-		mockApiCaller.schemaSelector.select.mockImplementation(() =>
-			Promise.reject(new Error("Database connection failed"))
-		);
-
-		const caller = workflowOrchestratorRouter.createCaller(createTestContext());
-		const result = await caller.execute({
-			query: "Show all data",
-			databaseSchema: JSON.stringify({
-				test_table: {
-					properties: {
-						id: { type: "INTEGER", nullable: false },
+	test(
+		"execute should handle workflow errors gracefully",
+		withSuppressedConsoleError(async () => {
+			// Mock query analysis to succeed
+			mockApiCaller.queryAnalyzer.analyze.mockResolvedValue({
+				success: true,
+				analysis: {
+					queryId: "test-error",
+					originalQuery: "Show all data",
+					timestamp: new Date().toISOString(),
+					feasibility: { isFeasible: true },
+					clarity: { isClear: true },
+					routing: {
+						strategy: "sql_only",
+						reason: "Simple query",
+						confidence: 0.9,
+					},
+					sqlConfig: {
+						tables: ["test_table"],
+						canUseFuzzySearch: false,
+						estimatedComplexity: "simple",
 					},
 				},
-			}),
-		});
+				executionTime: 100,
+			});
 
-		expect(result.status).toBe("failed");
-		expect(result.strategy).toBe("sql_only");
-		expect(result.error).toContain("Database connection failed");
-		expect(result.metadata.steps).toHaveLength(2); // QueryAnalysis + Failed step
-		expect(result.metadata.steps[1]!.status).toBe("failed");
-	}));
+			// Mock schema selection to fail
+			mockApiCaller.schemaSelector.select.mockReset();
+			mockApiCaller.schemaSelector.select.mockImplementation(() =>
+				Promise.reject(new Error("Database connection failed")),
+			);
+
+			const caller = workflowOrchestratorRouter.createCaller(
+				createTestContext(),
+			);
+			const result = await caller.execute({
+				query: "Show all data",
+				databaseSchema: JSON.stringify({
+					test_table: {
+						properties: {
+							id: { type: "INTEGER", nullable: false },
+						},
+					},
+				}),
+			});
+
+			expect(result.status).toBe("failed");
+			expect(result.strategy).toBe("sql_only");
+			expect(result.error).toContain("Database connection failed");
+			expect(result.metadata.steps).toHaveLength(2); // QueryAnalysis + Failed step
+			expect(result.metadata.steps[1]!.status).toBe("failed");
+		}),
+	);
 
 	test("execute should respect workflow options", async () => {
 		// Mock successful SQL-only workflow
@@ -529,7 +534,7 @@ describe("workflowOrchestratorRouter", () => {
 				routing: {
 					strategy: "sql_only",
 					reason: "Simple query",
-					confidence: 0.90,
+					confidence: 0.9,
 				},
 				sqlConfig: {
 					tables: ["test_table"],
@@ -588,7 +593,7 @@ describe("workflowOrchestratorRouter", () => {
 		expect(mockApiCaller.sqlExecutor.execute).toHaveBeenCalledWith(
 			expect.objectContaining({
 				maxRows: 50,
-			})
+			}),
 		);
 	});
 
@@ -603,7 +608,7 @@ describe("workflowOrchestratorRouter", () => {
 		expect(result.deployment.platform).toBe("CloudFlare Workers");
 
 		// Verify flow definitions
-		const sqlOnlyFlow = result.flows.find(f => f.strategy === "sql_only");
+		const sqlOnlyFlow = result.flows.find((f) => f.strategy === "sql_only");
 		expect(sqlOnlyFlow?.steps).toEqual([
 			"query-analysis",
 			"schema-selection",
@@ -611,10 +616,12 @@ describe("workflowOrchestratorRouter", () => {
 			"sql-execution",
 		]);
 
-		const vectorOnlyFlow = result.flows.find(f => f.strategy === "vector_only");
+		const vectorOnlyFlow = result.flows.find(
+			(f) => f.strategy === "vector_only",
+		);
 		expect(vectorOnlyFlow?.steps).toEqual(["query-analysis", "vector-search"]);
 
-		const hybridFlow = result.flows.find(f => f.strategy === "hybrid");
+		const hybridFlow = result.flows.find((f) => f.strategy === "hybrid");
 		expect(hybridFlow?.steps).toEqual([
 			"query-analysis",
 			"vector-search",

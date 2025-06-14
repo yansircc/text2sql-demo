@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, jest, mock, test } from "bun:test";
 import { queryAnalyzerRouter } from "../query-analyzer";
 import { QueryAnalysisSchema } from "../query-analyzer";
-import { createTestContext } from "./test-helpers";
 import { correctQueryAnalysisMock } from "./correct-mock-data";
+import { createTestContext } from "./test-helpers";
 
 // Create mock function
 const mockGenerateObject = jest.fn(() => Promise.resolve({ object: {} }));
@@ -28,12 +28,15 @@ describe("queryAnalyzerRouter", () => {
 	});
 
 	test("analyze should return SQL-only strategy for structured queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctQueryAnalysisMock.sqlOnly });
+		mockGenerateObject.mockResolvedValue({
+			object: correctQueryAnalysisMock.sqlOnly,
+		});
 
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
 			query: "Show all orders from last month",
-			databaseSchema: "CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, total DECIMAL);",
+			databaseSchema:
+				"CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, total DECIMAL);",
 		});
 
 		expect(result).toEqual({
@@ -45,14 +48,17 @@ describe("queryAnalyzerRouter", () => {
 	});
 
 	test("analyze should return vector-only strategy for semantic queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctQueryAnalysisMock.vectorOnly });
+		mockGenerateObject.mockResolvedValue({
+			object: correctQueryAnalysisMock.vectorOnly,
+		});
 
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
 			query: "Find companies working on sustainable energy",
-			databaseSchema: "CREATE TABLE companies (id INTEGER, name TEXT, description TEXT, mission TEXT);",
+			databaseSchema:
+				"CREATE TABLE companies (id INTEGER, name TEXT, description TEXT, mission TEXT);",
 			vectorizedFields: {
-				companies: ["description", "mission"]
+				companies: ["description", "mission"],
 			},
 		});
 
@@ -66,14 +72,17 @@ describe("queryAnalyzerRouter", () => {
 	});
 
 	test("analyze should return hybrid strategy for complex queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctQueryAnalysisMock.hybrid });
+		mockGenerateObject.mockResolvedValue({
+			object: correctQueryAnalysisMock.hybrid,
+		});
 
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
 			query: "Show recent orders for companies similar to Tesla",
-			databaseSchema: "CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, company_id INTEGER); CREATE TABLE companies (id INTEGER, name TEXT, description TEXT, industry TEXT);",
+			databaseSchema:
+				"CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, company_id INTEGER); CREATE TABLE companies (id INTEGER, name TEXT, description TEXT, industry TEXT);",
 			vectorizedFields: {
-				companies: ["description", "industry"]
+				companies: ["description", "industry"],
 			},
 		});
 
@@ -88,7 +97,9 @@ describe("queryAnalyzerRouter", () => {
 	});
 
 	test("analyze should handle infeasible queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctQueryAnalysisMock.rejected });
+		mockGenerateObject.mockResolvedValue({
+			object: correctQueryAnalysisMock.rejected,
+		});
 
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
@@ -106,12 +117,15 @@ describe("queryAnalyzerRouter", () => {
 	});
 
 	test("analyze should handle unclear queries", async () => {
-		mockGenerateObject.mockResolvedValue({ object: correctQueryAnalysisMock.unclear });
+		mockGenerateObject.mockResolvedValue({
+			object: correctQueryAnalysisMock.unclear,
+		});
 
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
 			query: "Show the data",
-			databaseSchema: "CREATE TABLE companies (id INTEGER, name TEXT); CREATE TABLE orders (id INTEGER);",
+			databaseSchema:
+				"CREATE TABLE companies (id INTEGER, name TEXT); CREATE TABLE orders (id INTEGER);",
 		});
 
 		expect(result).toEqual({
@@ -191,7 +205,8 @@ describe("queryAnalyzerRouter", () => {
 		const caller = queryAnalyzerRouter.createCaller(createTestContext());
 		const result = await caller.analyze({
 			query: "What is the total revenue by company last year?",
-			databaseSchema: "CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, company_id INTEGER, revenue DECIMAL); CREATE TABLE companies (id INTEGER, name TEXT);",
+			databaseSchema:
+				"CREATE TABLE orders (id INTEGER, created_at TIMESTAMP, company_id INTEGER, revenue DECIMAL); CREATE TABLE companies (id INTEGER, name TEXT);",
 		});
 
 		expect(result).toEqual({

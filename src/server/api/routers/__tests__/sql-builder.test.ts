@@ -362,24 +362,27 @@ describe("sqlBuilderRouter", () => {
 		expect(result.result.usesIndex).toBe(false);
 	});
 
-	test("build should handle errors gracefully", withSuppressedConsoleError(async () => {
-		// Clear any previous mock implementations
-		mockGenerateObject.mockReset();
-		mockGenerateObject.mockImplementation(() => 
-			Promise.reject(new Error("AI service unavailable"))
-		);
+	test(
+		"build should handle errors gracefully",
+		withSuppressedConsoleError(async () => {
+			// Clear any previous mock implementations
+			mockGenerateObject.mockReset();
+			mockGenerateObject.mockImplementation(() =>
+				Promise.reject(new Error("AI service unavailable")),
+			);
 
-		const caller = sqlBuilderRouter.createCaller(createTestContext());
+			const caller = sqlBuilderRouter.createCaller(createTestContext());
 
-		await expect(
-			caller.build({
-				query: "Show all data",
-				slimSchema: {},
-				selectedTables: [],
-				sqlHints: {},
-			})
-		).rejects.toThrow("SQL构建失败");
-	}));
+			await expect(
+				caller.build({
+					query: "Show all data",
+					slimSchema: {},
+					selectedTables: [],
+					sqlHints: {},
+				}),
+			).rejects.toThrow("SQL构建失败");
+		}),
+	);
 
 	test("build should handle empty schema", async () => {
 		const mockSqlResult = {

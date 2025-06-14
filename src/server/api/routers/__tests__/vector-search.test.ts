@@ -203,14 +203,16 @@ describe("vectorSearchRouter", () => {
 	test("search should apply limit to each query", async () => {
 		const mockEmbedding = [0.1, 0.2, 0.3, 0.4];
 		mockEmbedText.mockResolvedValue(mockEmbedding);
-		
+
 		// Return more results than limit
-		const manyResults = Array(20).fill(null).map((_, i) => ({
-			id: i,
-			score: 0.9 - i * 0.01,
-			payload: { companyId: i, name: `Company ${i}` },
-		}));
-		
+		const manyResults = Array(20)
+			.fill(null)
+			.map((_, i) => ({
+				id: i,
+				score: 0.9 - i * 0.01,
+				payload: { companyId: i, name: `Company ${i}` },
+			}));
+
 		mockQdrantService.collectionExists.mockResolvedValue(true);
 		mockQdrantService.search.mockResolvedValue(manyResults.slice(0, 5));
 
@@ -233,9 +235,9 @@ describe("vectorSearchRouter", () => {
 	test("search should handle multiple fields with ranking", async () => {
 		const mockEmbedding = [0.1, 0.2, 0.3, 0.4];
 		mockEmbedText.mockResolvedValue(mockEmbedding);
-		
+
 		mockQdrantService.collectionExists.mockResolvedValue(true);
-		
+
 		// Different scores for different fields
 		mockQdrantService.search
 			.mockResolvedValueOnce([
@@ -283,7 +285,9 @@ describe("vectorSearchRouter", () => {
 		mockQdrantService.collectionExists.mockResolvedValue(true);
 		mockQdrantService.search
 			.mockResolvedValueOnce(mockSearchResults.slice(0, 2)) // First field: id 0,1
-			.mockResolvedValueOnce(mockSearchResults.slice(2, 4).map(r => ({ ...r, id: r.id + 10 }))); // Second field: id 12,13
+			.mockResolvedValueOnce(
+				mockSearchResults.slice(2, 4).map((r) => ({ ...r, id: r.id + 10 })),
+			); // Second field: id 12,13
 
 		const caller = vectorSearchRouter.createCaller(createTestContext());
 		const result = await caller.search({
@@ -301,25 +305,28 @@ describe("vectorSearchRouter", () => {
 		expect(result.result.totalResults).toBe(4);
 	});
 
-	test("search should handle search errors gracefully", withSuppressedConsoleError(async () => {
-		// Set flag to throw error
-		shouldEmbedThrow = true;
+	test(
+		"search should handle search errors gracefully",
+		withSuppressedConsoleError(async () => {
+			// Set flag to throw error
+			shouldEmbedThrow = true;
 
-		const caller = vectorSearchRouter.createCaller(createTestContext());
-		
-		await expect(
-			caller.search({
-				queries: [
-					{
-						table: "companies",
-						fields: ["description"],
-						searchText: "test",
-						limit: 10,
-					},
-				],
-			})
-		).rejects.toThrow("向量搜索失败");
-	}));
+			const caller = vectorSearchRouter.createCaller(createTestContext());
+
+			await expect(
+				caller.search({
+					queries: [
+						{
+							table: "companies",
+							fields: ["description"],
+							searchText: "test",
+							limit: 10,
+						},
+					],
+				}),
+			).rejects.toThrow("向量搜索失败");
+		}),
+	);
 
 	test("search should skip non-vectorized fields", async () => {
 		const mockEmbedding = [0.1, 0.2, 0.3, 0.4];
@@ -327,7 +334,7 @@ describe("vectorSearchRouter", () => {
 
 		// Collection exists but field is not vectorized
 		mockQdrantService.collectionExists.mockResolvedValue(true);
-		
+
 		// Mock collection info without "name" field
 		mockQdrantService.getClient.mockReturnValueOnce({
 			getCollection: jest.fn(() =>

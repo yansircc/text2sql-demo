@@ -274,18 +274,98 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						// Step 4: SQL 执行
 						console.log("[Workflow] Step 4: SQL执行");
 						const sqlExecStartTime = Date.now();
+						let sqlExecResult: any;
+						let finalSql = sqlBuildResult.result.sql;
 
-						const sqlExecResult = await api.sqlExecutor.execute({
-							sql: sqlBuildResult.result.sql,
-							queryType: sqlBuildResult.result.queryType,
-							maxRows: input.options?.maxRows || 100,
-						});
+						try {
+							sqlExecResult = await api.sqlExecutor.execute({
+								sql: finalSql,
+								queryType: sqlBuildResult.result.queryType,
+								maxRows: input.options?.maxRows || 100,
+							});
 
-						steps.push({
-							name: "SQLExecution",
-							status: "success",
-							time: Date.now() - sqlExecStartTime,
-						});
+							steps.push({
+								name: "SQLExecution",
+								status: "success",
+								time: Date.now() - sqlExecStartTime,
+							});
+						} catch (sqlError: any) {
+							console.log(
+								"[Workflow] SQL执行失败，尝试错误处理:",
+								sqlError.message,
+							);
+
+							// 记录原始SQL执行失败
+							steps.push({
+								name: "SQLExecution",
+								status: "failed",
+								time: Date.now() - sqlExecStartTime,
+								error: sqlError.message,
+							});
+
+							// Step 4B: SQL错误处理
+							const errorHandlerStartTime = Date.now();
+							try {
+								const errorHandlerResult =
+									await api.sqlErrorHandler.handleError({
+										failedSql: finalSql,
+										errorMessage: sqlError.message,
+										naturalLanguageQuery: input.query,
+										selectedSchema: {
+											tables: schemaResult.result.selectedTables.map(
+												(table: any) => ({
+													name: table.name,
+													columns: table.columns.map((col: any) => ({
+														name: col.name,
+														type: col.type,
+														nullable: col.nullable,
+													})),
+												}),
+											),
+										},
+										queryType: sqlBuildResult.result.queryType,
+										routingStrategy: analysis.routing.strategy,
+									});
+
+								console.log("[Workflow] 错误处理成功，重试SQL执行");
+
+								// 更新SQL为修正后的版本
+								finalSql = errorHandlerResult.result.correctedSql;
+								generatedSql = finalSql;
+
+								steps.push({
+									name: "SQLErrorHandler",
+									status: "success",
+									time: Date.now() - errorHandlerStartTime,
+								});
+
+								// 执行修正后的SQL
+								const correctedSqlStartTime = Date.now();
+								sqlExecResult = await api.sqlExecutor.execute({
+									sql: finalSql,
+									queryType: sqlBuildResult.result.queryType,
+									maxRows: input.options?.maxRows || 100,
+								});
+
+								steps.push({
+									name: "SQLExecutionCorrected",
+									status: "success",
+									time: Date.now() - correctedSqlStartTime,
+								});
+							} catch (errorHandlerError: any) {
+								console.error("[Workflow] 错误处理失败:", errorHandlerError);
+
+								steps.push({
+									name: "SQLErrorHandler",
+									status: "failed",
+									time: Date.now() - errorHandlerStartTime,
+									error: errorHandlerError.message,
+								});
+
+								// 重新抛出原始错误
+								throw sqlError;
+							}
+						}
 
 						// 如果是 hybrid，需要融合结果
 						if (analysis.routing.strategy === "hybrid" && vectorResults) {
@@ -431,6 +511,20 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					inputs: ["sql", "queryType"],
 					outputs: ["sqlResults"],
 					router: "sqlExecutor.execute",
+				},
+				{
+					id: "sql-error-handler",
+					name: "SQL错误处理",
+					description: "分析SQL执行错误并生成修正后的SQL",
+					condition: "sql执行失败时触发",
+					inputs: [
+						"failedSql",
+						"errorMessage",
+						"selectedSchema",
+						"queryContext",
+					],
+					outputs: ["correctedSql", "errorAnalysis"],
+					router: "sqlErrorHandler.handleError",
 				},
 				{
 					id: "result-fusion",
