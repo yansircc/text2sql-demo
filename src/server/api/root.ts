@@ -8,6 +8,7 @@ import { sqlErrorHandlerRouter } from "@/server/api/routers/sql-error-handler";
 import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
 import { vectorSearchRouter } from "@/server/api/routers/vector-search";
 import { workflowOrchestratorRouter } from "@/server/api/routers/workflow-orchestrator";
+import { workflowOrchestratorOptimizedRouter } from "@/server/api/routers/workflow-orchestrator-optimized";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
 	sqlErrorHandler: sqlErrorHandlerRouter,
 	resultFusion: resultFusionRouter,
 	workflow: workflowOrchestratorRouter,
+	workflowOptimized: workflowOrchestratorOptimizedRouter,
 
 	// 辅助功能
 	cache: cacheRouter,

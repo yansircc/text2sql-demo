@@ -136,9 +136,22 @@ export const queryAnalyzerRouter = createTRPCRouter({
 3. 混合搜索：需要两种方法结合时使用（如：精确条件+语义搜索）
 4. 拒绝处理：不可行或不清晰的查询
 
+重要：你必须在routing对象中包含strategy字段，其值必须是以下之一：
+- "sql_only": 纯SQL查询
+- "vector_only": 纯向量搜索
+- "hybrid": 混合搜索（SQL+向量）
+- "rejected": 拒绝的查询
+
+示例routing对象：
+{
+  "strategy": "hybrid",
+  "reason": "需要语义理解和SQL筛选结合",
+  "confidence": 0.95
+}
+
 请提供：
 - 可行性和清晰度评估
-- 明确的路由决策
+- 明确的路由决策（必须包含strategy字段）
 - 具体的执行配置`;
 
 				const { object: analysis } = await generateObject({
