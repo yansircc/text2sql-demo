@@ -6,6 +6,7 @@ import type { PipelineResults } from "./types";
 export function usePipeline() {
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<PipelineResults>({});
+	const [useTripleBuilder, setUseTripleBuilder] = useState(false);
 
 	// 新版工作流 API
 	const workflowMutation = api.workflow.execute.useMutation();
@@ -21,6 +22,7 @@ export function usePipeline() {
 				vectorizedFields: VectorizedFieldsMap,
 				options: {
 					maxRows: 100,
+					useTripleSqlBuilder: useTripleBuilder,
 				},
 			});
 
@@ -54,5 +56,7 @@ export function usePipeline() {
 		executeQuery,
 		clearResults,
 		isLoading: workflowMutation.isPending,
+		useTripleBuilder,
+		setUseTripleBuilder,
 	};
 }

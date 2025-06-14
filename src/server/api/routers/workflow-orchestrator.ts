@@ -63,6 +63,15 @@ export const WorkflowResultSchema = z.object({
 		sqlModel: z.string().optional(),
 		sqlDifficulty: z.string().optional(),
 		cacheHits: z.number().optional(),
+		tripleVoting: z.object({
+			votes: z.record(z.number()),
+			avgConfidence: z.number(),
+			allResults: z.array(z.object({
+				strategy: z.string(),
+				rowCount: z.number(),
+				hasError: z.boolean(),
+			})),
+		}).optional(),
 	}),
 
 	// 错误信息
@@ -105,6 +114,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 			let sqlModel: string | undefined;
 			let sqlDifficulty: string | undefined;
 			let cacheHits = 0;
+			let tripleVoting: any | undefined;
 
 			try {
 				// Step 1: 查询分析
@@ -339,6 +349,9 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							};
 							
 							console.log(`[Workflow] Triple策略选择: ${tripleResult.strategy}, 投票: ${JSON.stringify(tripleResult.voting.votes)}`);
+							
+							// Store triple voting info
+							tripleVoting = tripleResult.voting;
 						} else {
 							sqlBuildResult = await api.sqlBuilder.build({
 								query: input.query,
@@ -519,6 +532,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						sqlModel,
 						sqlDifficulty,
 						cacheHits,
+						tripleVoting,
 					},
 				};
 			} catch (error) {

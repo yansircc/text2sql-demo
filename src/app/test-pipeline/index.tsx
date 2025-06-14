@@ -6,7 +6,7 @@ import { ResultDisplay } from "./result-display";
 import { usePipeline } from "./use-pipeline";
 
 export default function TestPipelinePage() {
-	const { query, setQuery, results, executeQuery, clearResults, isLoading } =
+	const { query, setQuery, results, executeQuery, clearResults, isLoading, useTripleBuilder, setUseTripleBuilder } =
 		usePipeline();
 
 	return (
@@ -40,6 +40,32 @@ export default function TestPipelinePage() {
 			<ExampleQueries onQuerySelect={setQuery} />
 
 			<QueryInput query={query} onQueryChange={setQuery} />
+
+			{/* Triple SQL Builder Toggle */}
+			<div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
+				<label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+					<input
+						type="checkbox"
+						checked={useTripleBuilder}
+						onChange={(e) => setUseTripleBuilder(e.target.checked)}
+						style={{ width: "18px", height: "18px", cursor: "pointer" }}
+					/>
+					<span style={{ fontSize: "14px", fontWeight: "500" }}>
+						使用三重SQL策略 (3个并行构建 + 投票)
+					</span>
+				</label>
+				{useTripleBuilder && (
+					<span style={{ 
+						fontSize: "12px", 
+						color: "#666",
+						padding: "4px 8px",
+						backgroundColor: "#e3f2fd",
+						borderRadius: "4px"
+					}}>
+						⚠️ 耗时较长但准确性更高
+					</span>
+				)}
+			</div>
 
 			<div style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
 				<button

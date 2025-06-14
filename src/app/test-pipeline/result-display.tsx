@@ -163,7 +163,9 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 												? "#ff9800"
 												: wf.metadata.sqlDifficulty === "very_hard"
 													? "#f44336"
-													: "#666",
+													: wf.metadata.sqlDifficulty === "triple"
+														? "#2196f3"
+														: "#666",
 								}}
 							>
 								{wf.metadata.sqlDifficulty === "easy"
@@ -174,12 +176,60 @@ export function ResultDisplay({ results }: ResultDisplayProps) {
 											? "非常困难"
 											: wf.metadata.sqlDifficulty === "cached"
 												? "已缓存"
-												: wf.metadata.sqlDifficulty}
+												: wf.metadata.sqlDifficulty === "triple"
+													? "三重策略"
+													: wf.metadata.sqlDifficulty}
 							</span>
 						</>
 					)}
 				</div>
 			</div>
+
+			{/* Triple SQL Voting Info */}
+			{wf.metadata?.tripleVoting && (
+				<div
+					style={{
+						marginBottom: "16px",
+						padding: "12px",
+						backgroundColor: "#e3f2fd",
+						borderRadius: "6px",
+						fontSize: "13px",
+						border: "1px solid #2196f3",
+					}}
+				>
+					<div style={{ fontWeight: "600", marginBottom: "8px", color: "#1976d2" }}>
+						🗳️ 三重SQL策略投票结果
+					</div>
+					<div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+						{wf.metadata.tripleVoting.allResults.map((result: any) => (
+							<div
+								key={result.strategy}
+								style={{
+									padding: "8px",
+									backgroundColor: result.strategy === wf.metadata.sqlModel ? "#bbdefb" : "#f5f5f5",
+									borderRadius: "4px",
+									border: result.strategy === wf.metadata.sqlModel ? "2px solid #1976d2" : "1px solid #ddd",
+								}}
+							>
+								<div style={{ fontWeight: "600", textTransform: "capitalize" }}>
+									{result.strategy}
+									{result.strategy === wf.metadata.sqlModel && " ✅"}
+								</div>
+								<div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+									结果: {result.rowCount} 行
+									{result.hasError && " ❌错误"}
+								</div>
+								<div style={{ fontSize: "12px", color: "#666" }}>
+									得票: {wf.metadata.tripleVoting.votes[result.strategy] || 0}
+								</div>
+							</div>
+						))}
+					</div>
+					<div style={{ marginTop: "8px", fontSize: "12px", color: "#666" }}>
+						平均置信度: {(wf.metadata.tripleVoting.avgConfidence * 100).toFixed(1)}%
+					</div>
+				</div>
+			)}
 
 			{/* 执行步骤 */}
 			{wf.metadata?.steps && wf.metadata.steps.length > 0 && (
