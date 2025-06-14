@@ -96,7 +96,7 @@ const SimpleSqlResultSchema = z.object({
 const VoteResultSchema = z.object({
   selectedStrategy: z.enum(["conservative", "balanced", "aggressive"]),
   reason: z.string(),
-  confidence: z.number(),
+  confidence: z.number().min(0).max(1), // Ensure confidence is between 0-1
 });
 
 async function buildSqlWithStrategy(
@@ -118,7 +118,8 @@ CONSERVATIVE策略要求：
 2. 优先使用精确匹配而非模糊搜索
 3. 谨慎使用JOIN，确保关联正确
 4. 限制结果数量，使用较小的LIMIT
-5. 当有向量搜索结果时，不要添加额外的文本过滤条件`;
+5. 当有向量搜索结果时，不要添加额外的文本过滤条件
+6. 特别注意比较运算符：>= 表示大于等于，> 表示大于`;
       break;
       
     case "balanced":
@@ -136,9 +137,10 @@ BALANCED策略要求：
 AGGRESSIVE策略要求：
 1. 扩展搜索范围，不仅限于向量搜索ID
 2. 积极使用多种模糊搜索模式
-3. 使用LEFT JOIN确保不遗漏数据
+3. 使用LEFT JOIN确保不遗漏数据（只能JOIN提供的schema中存在的表）
 4. 较大的结果限制或不限制
-5. 即使有向量搜索，也要添加多种文本匹配确保召回率`;
+5. 即使有向量搜索，也要添加多种文本匹配确保召回率
+注意：只能使用提供的schema中的表，不要假设其他表存在`;
       break;
   }
   
@@ -214,7 +216,12 @@ async function voteOnResults(
 2. 结果数量 - 不能太少（遗漏）也不能太多（噪音）
 3. 执行成功率 - 是否有错误
 4. 查询效率 - 执行时间
-5. 数据完整性 - 是否包含用户要求的所有字段`;
+5. 数据完整性 - 是否包含用户要求的所有字段
+
+重要规则:
+- 如果所有策略都返回0行，选择conservative（最简单可靠）
+- 如果策略有错误，不要选择它
+- confidence必须在0到1之间（例如0.8表示80%确信度）`;
   
   const resultsInfo = results.map(r => ({
     strategy: r.strategy,
@@ -267,6 +274,11 @@ export const sqlBuilderTripleRouter = createTRPCRouter({
         
         const buildResults = await Promise.all(buildPromises);
         console.log("[TripleBuilder] 3个SQL构建完成");
+        
+        // Log generated SQLs for debugging
+        buildResults.forEach(result => {
+          console.log(`[TripleBuilder] ${result.strategy} SQL:`, result.sql.substring(0, 200) + "...");
+        });
         
         // Step 2: Execute all SQLs to get actual results
         console.log("[TripleBuilder] Step 2: 执行所有SQL获取结果");
@@ -327,7 +339,28 @@ export const sqlBuilderTripleRouter = createTRPCRouter({
         }
         
         // Get the winning result
-        const winningResult = executedResults.find(r => r.strategy === winner)!;
+        let winningResult = executedResults.find(r => r.strategy === winner)!;
+        
+        // If the winning result has 0 rows or error, try to find a better alternative
+        if (winningResult.rowCount === 0 || winningResult.error) {
+          // Find any result that has rows and no error
+          const betterResult = executedResults.find(r => r.rowCount! > 0 && !r.error);
+          if (betterResult) {
+            winningResult = betterResult;
+            winner = betterResult.strategy;
+            console.log("[TripleBuilder] 覆盖投票结果，选择有数据的策略:", winner);
+          } else {
+            // If all strategies failed, log warning
+            console.warn("[TripleBuilder] 警告：所有策略都返回0行或有错误");
+            
+            // Try to use the strategy without error at least
+            const noErrorResult = executedResults.find(r => !r.error);
+            if (noErrorResult) {
+              winningResult = noErrorResult;
+              winner = noErrorResult.strategy;
+            }
+          }
+        }
         
         console.log("[TripleBuilder] 最终选择:", {
           winner,

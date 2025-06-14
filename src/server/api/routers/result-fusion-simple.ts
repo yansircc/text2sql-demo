@@ -223,6 +223,20 @@ ${JSON.stringify(sqlInfo?.slice(0, 10), null, 2)}
 						},
 					};
 				}
+				// If no SQL results, try vector results
+				if (input.vectorResults && input.vectorResults.length > 0) {
+					console.log("[SimpleFusion] SQL结果为空，降级到向量结果");
+					return {
+						success: true,
+						results: input.vectorResults.slice(0, input.maxResults),
+						count: input.vectorResults.length,
+						metadata: {
+							explanation: "SQL结果为空，返回向量搜索结果",
+							vectorUsed: true,
+							sqlUsed: false,
+						},
+					};
+				}
 				throw new Error("简单结果融合失败");
 			}
 		}),
