@@ -8,7 +8,7 @@ import { cacheManager } from "@/server/lib/cache-manager";
 
 /**
  * Simplified SQL Builder - Optimized for faster AI generation
- * 
+ *
  * Key improvements:
  * - 67% fewer fields in output
  * - Only essential SQL and type
@@ -18,10 +18,12 @@ import { cacheManager } from "@/server/lib/cache-manager";
 // Minimal output schema
 export const SimpleSQLBuilderResultSchema = z.object({
 	sql: z.string(),
-	queryType: z.enum(["SELECT", "AGGREGATE"])
+	queryType: z.enum(["SELECT", "AGGREGATE"]),
 });
 
-export type SimpleSQLBuilderResult = z.infer<typeof SimpleSQLBuilderResultSchema>;
+export type SimpleSQLBuilderResult = z.infer<
+	typeof SimpleSQLBuilderResultSchema
+>;
 
 export const sqlBuilderSimplifiedRouter = createTRPCRouter({
 	buildSimple: publicProcedure
@@ -41,7 +43,7 @@ export const sqlBuilderSimplifiedRouter = createTRPCRouter({
 			console.log("[SimpleSQLBuilder] 构建SQL:", {
 				tables: input.tables,
 				difficulty: input.difficulty,
-				hasVectorFilter: !!input.vectorIds?.length
+				hasVectorFilter: !!input.vectorIds?.length,
 			});
 
 			// Generate cache key
@@ -49,16 +51,21 @@ export const sqlBuilderSimplifiedRouter = createTRPCRouter({
 				query: input.query,
 				tables: input.tables,
 				fields: input.fields,
-				vectorIdCount: input.vectorIds?.length || 0
+				vectorIdCount: input.vectorIds?.length || 0,
 			});
 
 			// Check cache
-			const cached = await cacheManager.get(cacheKey);
+			const cached = await cacheManager.getSqlGeneration(cacheKey);
 			if (cached) {
 				console.log("[SimpleSQLBuilder] 使用缓存结果");
+				// Convert to simple format
+				const simpleResult: SimpleSQLBuilderResult = {
+					sql: cached.sql,
+					queryType: cached.queryType as "SELECT" | "AGGREGATE",
+				};
 				return {
 					success: true,
-					result: cached as SimpleSQLBuilderResult,
+					result: simpleResult,
 					executionTime: Date.now() - startTime,
 					cached: true,
 					model: "cached",
@@ -67,8 +74,9 @@ export const sqlBuilderSimplifiedRouter = createTRPCRouter({
 
 			try {
 				// Select model based on difficulty
-				const model = input.difficulty === "hard" ? "claude-3-sonnet-20240229" : "gpt-4o-mini";
-				
+				const model =
+					input.difficulty === "hard" ? "claude-3-sonnet-20240229" : "gpt-4.1";
+
 				const ai = createOpenAI({
 					apiKey: env.AIHUBMIX_API_KEY,
 					baseURL: env.AIHUBMIX_BASE_URL,
@@ -88,9 +96,10 @@ export const sqlBuilderSimplifiedRouter = createTRPCRouter({
 					hints.push(`时间字段: ${input.timeField}`);
 				}
 				if (input.vectorIds?.length) {
-					const idList = input.vectorIds.length > 10 
-						? `${input.vectorIds.slice(0, 10).join(",")}...` 
-						: input.vectorIds.join(",");
+					const idList =
+						input.vectorIds.length > 10
+							? `${input.vectorIds.slice(0, 10).join(",")}...`
+							: input.vectorIds.join(",");
 					hints.push(`向量搜索ID过滤: IN (${idList})`);
 				}
 
@@ -120,8 +129,7 @@ ${hints.length ? `提示:\n${hints.join("\n")}` : ""}
 					temperature: 0.1,
 				});
 
-				// Cache result
-				await cacheManager.set(cacheKey, result, 3600);
+				// Don't cache simplified results - they're derived from full results
 
 				console.log("[SimpleSQLBuilder] SQL构建完成:", {
 					sqlLength: result.sql.length,

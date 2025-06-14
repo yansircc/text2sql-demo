@@ -1,4 +1,5 @@
 import { cacheRouter } from "@/server/api/routers/cache";
+import { pipelineComparisonRouter } from "@/server/api/routers/pipeline-comparison";
 import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { queryAnalyzerSimplifiedRouter } from "@/server/api/routers/query-analyzer-simplified";
@@ -12,7 +13,6 @@ import { sqlExecutorRouter } from "@/server/api/routers/sql-executor";
 import { vectorSearchRouter } from "@/server/api/routers/vector-search";
 import { workflowOrchestratorRouter } from "@/server/api/routers/workflow-orchestrator";
 import { workflowOrchestratorOptimizedRouter } from "@/server/api/routers/workflow-orchestrator-optimized";
-import { pipelineComparisonRouter } from "@/server/api/routers/pipeline-comparison";
 import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc";
 
 /**

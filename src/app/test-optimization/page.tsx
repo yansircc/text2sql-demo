@@ -1,23 +1,26 @@
 "use client";
 
-import { useState } from "react";
 import { api } from "@/trpc/react";
+import { useState } from "react";
 
 export default function TestOptimization() {
-	const [query, setQuery] = useState("找一下对 ERP 相关产品感兴趣的日本 3 星以上的客户");
+	const [query, setQuery] = useState(
+		"找一下对 ERP 相关产品感兴趣的日本 3 星以上的客户",
+	);
 	const [isComparing, setIsComparing] = useState(false);
 	const [results, setResults] = useState<any>(null);
 
-	const compareMutation = api.pipelineComparison.compareFullPipeline.useMutation({
-		onSuccess: (data) => {
-			setResults(data);
-			setIsComparing(false);
-		},
-		onError: (error) => {
-			console.error("Comparison error:", error);
-			setIsComparing(false);
-		},
-	});
+	const compareMutation =
+		api.pipelineComparison.compareFullPipeline.useMutation({
+			onSuccess: (data) => {
+				setResults(data);
+				setIsComparing(false);
+			},
+			onError: (error) => {
+				console.error("Comparison error:", error);
+				setIsComparing(false);
+			},
+		});
 
 	const handleCompare = () => {
 		setIsComparing(true);
@@ -29,22 +32,24 @@ export default function TestOptimization() {
 	};
 
 	return (
-		<div className="p-8 max-w-6xl mx-auto">
-			<h1 className="text-3xl font-bold mb-8">Pipeline Optimization Test</h1>
-			
+		<div className="mx-auto max-w-6xl p-8">
+			<h1 className="mb-8 font-bold text-3xl">Pipeline Optimization Test</h1>
+
 			<div className="mb-8">
-				<label className="block text-sm font-medium mb-2">Test Query</label>
+				<label htmlFor="query" className="mb-2 block font-medium text-sm">
+					Test Query
+				</label>
 				<input
 					type="text"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
-					className="w-full p-3 border rounded-lg"
+					className="w-full rounded-lg border p-3"
 					placeholder="Enter a query to test..."
 				/>
 				<button
 					onClick={handleCompare}
 					disabled={isComparing || !query}
-					className="mt-4 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+					className="mt-4 rounded-lg bg-blue-500 px-6 py-3 text-white hover:bg-blue-600 disabled:opacity-50"
 				>
 					{isComparing ? "Comparing..." : "Compare Pipelines"}
 				</button>
@@ -53,30 +58,32 @@ export default function TestOptimization() {
 			{results && (
 				<div className="space-y-6">
 					{/* Summary */}
-					<div className="bg-green-50 border border-green-200 rounded-lg p-6">
-						<h2 className="text-xl font-semibold mb-4">Performance Improvements</h2>
-						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+					<div className="rounded-lg border border-green-200 bg-green-50 p-6">
+						<h2 className="mb-4 font-semibold text-xl">
+							Performance Improvements
+						</h2>
+						<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
 							<div>
-								<div className="text-sm text-gray-600">Total Time</div>
-								<div className="text-2xl font-bold text-green-600">
+								<div className="text-gray-600 text-sm">Total Time</div>
+								<div className="font-bold text-2xl text-green-600">
 									{results.improvements.totalTime}% faster
 								</div>
 							</div>
 							<div>
-								<div className="text-sm text-gray-600">Analysis</div>
-								<div className="text-xl font-semibold">
+								<div className="text-gray-600 text-sm">Analysis</div>
+								<div className="font-semibold text-xl">
 									{results.improvements.analysisTime}% faster
 								</div>
 							</div>
 							<div>
-								<div className="text-sm text-gray-600">Schema</div>
-								<div className="text-xl font-semibold">
+								<div className="text-gray-600 text-sm">Schema</div>
+								<div className="font-semibold text-xl">
 									{results.improvements.schemaTime}% faster
 								</div>
 							</div>
 							<div>
-								<div className="text-sm text-gray-600">SQL Build</div>
-								<div className="text-xl font-semibold">
+								<div className="text-gray-600 text-sm">SQL Build</div>
+								<div className="font-semibold text-xl">
 									{results.improvements.sqlTime}% faster
 								</div>
 							</div>
@@ -84,44 +91,47 @@ export default function TestOptimization() {
 					</div>
 
 					{/* Field Reduction */}
-					<div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-						<h2 className="text-xl font-semibold mb-4">Complexity Reduction</h2>
+					<div className="rounded-lg border border-blue-200 bg-blue-50 p-6">
+						<h2 className="mb-4 font-semibold text-xl">Complexity Reduction</h2>
 						<div className="grid grid-cols-3 gap-4">
 							<div>
-								<div className="text-sm text-gray-600">Analysis Fields</div>
-								<div className="text-xl font-semibold text-blue-600">
+								<div className="text-gray-600 text-sm">Analysis Fields</div>
+								<div className="font-semibold text-blue-600 text-xl">
 									{results.improvements.analysisFields}% fewer
 								</div>
-								<div className="text-sm text-gray-500">
-									{results.simplified.complexity.analysisFields} vs {results.original.complexity.analysisFields}
+								<div className="text-gray-500 text-sm">
+									{results.simplified.complexity.analysisFields} vs{" "}
+									{results.original.complexity.analysisFields}
 								</div>
 							</div>
 							<div>
-								<div className="text-sm text-gray-600">Schema Fields</div>
-								<div className="text-xl font-semibold text-blue-600">
+								<div className="text-gray-600 text-sm">Schema Fields</div>
+								<div className="font-semibold text-blue-600 text-xl">
 									{results.improvements.schemaFields}% fewer
 								</div>
-								<div className="text-sm text-gray-500">
-									{results.simplified.complexity.schemaFields} vs {results.original.complexity.schemaFields}
+								<div className="text-gray-500 text-sm">
+									{results.simplified.complexity.schemaFields} vs{" "}
+									{results.original.complexity.schemaFields}
 								</div>
 							</div>
 							<div>
-								<div className="text-sm text-gray-600">SQL Fields</div>
-								<div className="text-xl font-semibold text-blue-600">
+								<div className="text-gray-600 text-sm">SQL Fields</div>
+								<div className="font-semibold text-blue-600 text-xl">
 									{results.improvements.sqlFields}% fewer
 								</div>
-								<div className="text-sm text-gray-500">
-									{results.simplified.complexity.sqlFields} vs {results.original.complexity.sqlFields}
+								<div className="text-gray-500 text-sm">
+									{results.simplified.complexity.sqlFields} vs{" "}
+									{results.original.complexity.sqlFields}
 								</div>
 							</div>
 						</div>
 					</div>
 
 					{/* Detailed Comparison */}
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 						{/* Original Pipeline */}
-						<div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-							<h3 className="text-lg font-semibold mb-4">Original Pipeline</h3>
+						<div className="rounded-lg border border-gray-200 bg-gray-50 p-6">
+							<h3 className="mb-4 font-semibold text-lg">Original Pipeline</h3>
 							<div className="space-y-2 text-sm">
 								<div className="flex justify-between">
 									<span>Strategy:</span>
@@ -129,19 +139,26 @@ export default function TestOptimization() {
 								</div>
 								<div className="flex justify-between">
 									<span>Total Time:</span>
-									<span className="font-mono">{results.original.times.total}ms</span>
+									<span className="font-mono">
+										{results.original.times.total}ms
+									</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Cache Hits:</span>
 									<span>
-										{Object.values(results.original.cached || {}).filter(Boolean).length}/3
+										{
+											Object.values(results.original.cached || {}).filter(
+												Boolean,
+											).length
+										}
+										/3
 									</span>
 								</div>
 							</div>
 							{results.original.sql && (
 								<div className="mt-4">
-									<div className="text-sm font-medium mb-1">Generated SQL:</div>
-									<pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+									<div className="mb-1 font-medium text-sm">Generated SQL:</div>
+									<pre className="overflow-x-auto rounded bg-gray-100 p-2 text-xs">
 										{results.original.sql}
 									</pre>
 								</div>
@@ -149,28 +166,39 @@ export default function TestOptimization() {
 						</div>
 
 						{/* Simplified Pipeline */}
-						<div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-							<h3 className="text-lg font-semibold mb-4">Simplified Pipeline</h3>
+						<div className="rounded-lg border border-gray-200 bg-gray-50 p-6">
+							<h3 className="mb-4 font-semibold text-lg">
+								Simplified Pipeline
+							</h3>
 							<div className="space-y-2 text-sm">
 								<div className="flex justify-between">
 									<span>Strategy:</span>
-									<span className="font-mono">{results.simplified.strategy}</span>
+									<span className="font-mono">
+										{results.simplified.strategy}
+									</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Total Time:</span>
-									<span className="font-mono">{results.simplified.times.total}ms</span>
+									<span className="font-mono">
+										{results.simplified.times.total}ms
+									</span>
 								</div>
 								<div className="flex justify-between">
 									<span>Cache Hits:</span>
 									<span>
-										{Object.values(results.simplified.cached || {}).filter(Boolean).length}/3
+										{
+											Object.values(results.simplified.cached || {}).filter(
+												Boolean,
+											).length
+										}
+										/3
 									</span>
 								</div>
 							</div>
 							{results.simplified.sql && (
 								<div className="mt-4">
-									<div className="text-sm font-medium mb-1">Generated SQL:</div>
-									<pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+									<div className="mb-1 font-medium text-sm">Generated SQL:</div>
+									<pre className="overflow-x-auto rounded bg-gray-100 p-2 text-xs">
 										{results.simplified.sql}
 									</pre>
 								</div>
@@ -179,7 +207,7 @@ export default function TestOptimization() {
 					</div>
 
 					{/* Recommendation */}
-					<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+					<div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
 						<div className="font-semibold">{results.recommendation}</div>
 					</div>
 				</div>

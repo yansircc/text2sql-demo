@@ -8,7 +8,7 @@ import { cacheManager } from "@/server/lib/cache-manager";
 
 /**
  * Simplified Query Analyzer - Optimized for faster AI generation
- * 
+ *
  * Key improvements:
  * - 53% fewer fields in structured output
  * - 70% simpler structure (no deep nesting)
@@ -19,16 +19,20 @@ import { cacheManager } from "@/server/lib/cache-manager";
 export const SimpleQueryAnalysisSchema = z.object({
 	routing: z.object({
 		strategy: z.enum(["sql_only", "vector_only", "hybrid", "rejected"]),
-		confidence: z.number().min(0).max(1)
+		confidence: z.number().min(0).max(1),
 	}),
 	sqlTables: z.array(z.string()).optional(),
-	vectorQueries: z.array(z.object({
-		table: z.string(),
-		field: z.string(),
-		query: z.string()
-	})).optional(),
+	vectorQueries: z
+		.array(
+			z.object({
+				table: z.string(),
+				field: z.string(),
+				query: z.string(),
+			}),
+		)
+		.optional(),
 	feasible: z.boolean(),
-	reason: z.string().optional()
+	reason: z.string().optional(),
 });
 
 export type SimpleQueryAnalysis = z.infer<typeof SimpleQueryAnalysisSchema>;
@@ -53,12 +57,27 @@ export const queryAnalyzerSimplifiedRouter = createTRPCRouter({
 			});
 
 			// Check cache
-			const cached = await cacheManager.get(cacheKey);
+			const cached = await cacheManager.getQueryAnalysis(cacheKey);
 			if (cached) {
 				console.log("[SimpleQueryAnalyzer] 使用缓存结果");
+				// Convert to simple format
+				const simpleAnalysis: SimpleQueryAnalysis = {
+					routing: {
+						strategy: cached.routing.strategy,
+						confidence: cached.routing.confidence,
+					},
+					sqlTables: cached.sqlConfig?.tables,
+					vectorQueries: cached.vectorConfig?.queries.map((q: any) => ({
+						table: q.table,
+						field: q.fields[0] || "",
+						query: q.searchText,
+					})),
+					feasible: cached.feasibility.isFeasible,
+					reason: cached.feasibility.reason,
+				};
 				return {
 					success: true,
-					analysis: cached as SimpleQueryAnalysis,
+					analysis: simpleAnalysis,
 					executionTime: Date.now() - startTime,
 					cached: true,
 				};
@@ -73,9 +92,9 @@ export const queryAnalyzerSimplifiedRouter = createTRPCRouter({
 				// Parse schema to extract table names for context
 				const schema = JSON.parse(input.databaseSchema);
 				const tableNames = Object.keys(schema);
-				const vectorizedInfo = input.vectorizedFields ? 
-					`向量化字段: ${JSON.stringify(input.vectorizedFields)}` : 
-					"无向量化字段";
+				const vectorizedInfo = input.vectorizedFields
+					? `向量化字段: ${JSON.stringify(input.vectorizedFields)}`
+					: "无向量化字段";
 
 				const systemPrompt = `你是查询分析专家。快速分析查询并返回最简结果。
 
@@ -103,8 +122,7 @@ ${vectorizedInfo}
 					temperature: 0.1,
 				});
 
-				// Cache result
-				await cacheManager.set(cacheKey, analysis, 3600); // 1 hour
+				// Don't cache simplified results - they're derived from full results
 
 				console.log("[SimpleQueryAnalyzer] 分析完成:", {
 					strategy: analysis.routing.strategy,
@@ -131,27 +149,31 @@ ${vectorizedInfo}
 		.mutation(async ({ input, ctx }) => {
 			const schema = JSON.stringify({
 				companies: { id: "int", name: "text", country: "text", rating: "int" },
-				contacts: { id: "int", companyId: "int", email: "text" }
+				contacts: { id: "int", companyId: "int", email: "text" },
 			});
+
+			// Get router instances
+			const { createCaller } = await import("@/server/api/root");
+			const api = createCaller(ctx);
 
 			// Run both analyzers
 			const [simple, original] = await Promise.all([
-				ctx.db.transaction(async () => {
+				(async () => {
 					const start = Date.now();
-					const result = await ctx.queryAnalyzerSimplified.analyzeSimple({
+					const result = await api.queryAnalyzerSimplified.analyzeSimple({
 						query: input.query,
-						databaseSchema: schema
+						databaseSchema: schema,
 					});
 					return { ...result, time: Date.now() - start };
-				}),
-				ctx.db.transaction(async () => {
+				})(),
+				(async () => {
 					const start = Date.now();
-					const result = await ctx.queryAnalyzer.analyze({
+					const result = await api.queryAnalyzer.analyze({
 						query: input.query,
-						databaseSchema: schema
+						databaseSchema: schema,
 					});
 					return { ...result, time: Date.now() - start };
-				})
+				})(),
 			]);
 
 			return {
@@ -159,22 +181,24 @@ ${vectorizedInfo}
 				simple: {
 					time: simple.time,
 					fields: Object.keys(simple.analysis).length,
-					strategy: simple.analysis.routing.strategy
+					strategy: simple.analysis.routing.strategy,
 				},
 				original: {
 					time: original.time,
 					fields: countFields(original.analysis),
-					strategy: original.analysis.routing.strategy
+					strategy: original.analysis.routing.strategy,
 				},
-				speedup: ((original.time - simple.time) / original.time * 100).toFixed(1) + "%"
+				speedup:
+					(((original.time - simple.time) / original.time) * 100).toFixed(1) +
+					"%",
 			};
-		})
+		}),
 });
 
 function countFields(obj: any): number {
 	let count = 0;
 	for (const key in obj) {
-		if (typeof obj[key] === 'object' && obj[key] !== null) {
+		if (typeof obj[key] === "object" && obj[key] !== null) {
 			count += countFields(obj[key]);
 		} else {
 			count++;

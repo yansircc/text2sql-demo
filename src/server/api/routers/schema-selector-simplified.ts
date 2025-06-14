@@ -8,7 +8,7 @@ import { cacheManager } from "@/server/lib/cache-manager";
 
 /**
  * Simplified Schema Selector - Optimized for faster AI generation
- * 
+ *
  * Key improvements:
  * - 60% fewer fields in output
  * - Flat structure (no nested objects)
@@ -20,10 +20,12 @@ export const SimpleSchemaSelectorResultSchema = z.object({
 	tables: z.array(z.string()),
 	fields: z.record(z.array(z.string())),
 	joins: z.array(z.string()).optional(),
-	timeField: z.string().optional()
+	timeField: z.string().optional(),
 });
 
-export type SimpleSchemaSelectorResult = z.infer<typeof SimpleSchemaSelectorResultSchema>;
+export type SimpleSchemaSelectorResult = z.infer<
+	typeof SimpleSchemaSelectorResultSchema
+>;
 
 export const schemaSelectorSimplifiedRouter = createTRPCRouter({
 	selectSimple: publicProcedure
@@ -39,23 +41,38 @@ export const schemaSelectorSimplifiedRouter = createTRPCRouter({
 			const startTime = Date.now();
 			console.log("[SimpleSchemaSelector] 选择schema:", {
 				tables: input.tables,
-				hasVectorIds: !!input.vectorIds?.length
+				hasVectorIds: !!input.vectorIds?.length,
 			});
 
 			// Generate cache key
 			const cacheKey = cacheManager.generateCacheKey("schema-simple", {
 				query: input.query,
 				tables: input.tables,
-				vectorIdCount: input.vectorIds?.length || 0
+				vectorIdCount: input.vectorIds?.length || 0,
 			});
 
 			// Check cache
-			const cached = await cacheManager.get(cacheKey);
+			const cached = await cacheManager.getSchemaSelection(cacheKey);
 			if (cached) {
 				console.log("[SimpleSchemaSelector] 使用缓存结果");
+				// Convert to simple format
+				const simpleResult: SimpleSchemaSelectorResult = {
+					tables: cached.selectedTables.map((t: any) => t.tableName),
+					fields: cached.selectedTables.reduce(
+						(acc: any, t: any) => {
+							acc[t.tableName] = t.fields;
+							return acc;
+						},
+						{} as Record<string, string[]>,
+					),
+					joins: cached.sqlHints.joinHints?.map(
+						(j: any) => `${j.from} ${j.type} JOIN ${j.to} ON ${j.on}`,
+					),
+					timeField: cached.sqlHints.timeFields?.[0]?.field,
+				};
 				return {
 					success: true,
-					result: cached as SimpleSchemaSelectorResult,
+					result: simpleResult,
 					executionTime: Date.now() - startTime,
 					cached: true,
 				};
@@ -70,17 +87,19 @@ export const schemaSelectorSimplifiedRouter = createTRPCRouter({
 				// Parse schema and extract only needed tables
 				const fullSchema = JSON.parse(input.databaseSchema);
 				const relevantSchema: Record<string, any> = {};
-				input.tables.forEach(table => {
+				input.tables.forEach((table) => {
 					if (fullSchema[table]) {
 						relevantSchema[table] = fullSchema[table];
 					}
 				});
 
 				// Create simplified context
-				const schemaContext = Object.entries(relevantSchema).map(([table, schema]) => {
-					const fields = Object.keys(schema.columns || {});
-					return `${table}: ${fields.slice(0, 10).join(", ")}${fields.length > 10 ? "..." : ""}`;
-				}).join("\n");
+				const schemaContext = Object.entries(relevantSchema)
+					.map(([table, schema]) => {
+						const fields = Object.keys(schema.columns || {});
+						return `${table}: ${fields.slice(0, 10).join(", ")}${fields.length > 10 ? "..." : ""}`;
+					})
+					.join("\n");
 
 				const systemPrompt = `你是数据库专家。为查询选择必要的字段。
 
@@ -109,8 +128,7 @@ ${schemaContext}
 					temperature: 0.1,
 				});
 
-				// Cache result
-				await cacheManager.set(cacheKey, result, 3600);
+				// Don't cache simplified results - they're derived from full results
 
 				console.log("[SimpleSchemaSelector] 选择完成:", {
 					tableCount: result.tables.length,
