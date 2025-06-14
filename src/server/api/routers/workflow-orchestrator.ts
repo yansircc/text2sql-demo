@@ -30,6 +30,7 @@ export const WorkflowInputSchema = z.object({
 			maxRows: z.number().default(100),
 			timeout: z.number().default(30000),
 			enableCache: z.boolean().default(false),
+			useTripleSqlBuilder: z.boolean().default(false),
 		})
 		.optional(),
 });
@@ -313,15 +314,42 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						console.log("[Workflow] Step 3: SQL构建");
 						const sqlBuildStartTime = Date.now();
 
-						const sqlBuildResult = await api.sqlBuilder.build({
-							query: input.query,
-							slimSchema: schemaResult.result.slimSchema,
-							selectedTables: schemaResult.result.selectedTables,
-							sqlHints: {
-								...schemaResult.result.sqlHints,
-								vectorIds: vectorContext?.ids,
-							},
-						});
+						let sqlBuildResult: any;
+						
+						// Use triple SQL builder if enabled
+						if (input.options?.useTripleSqlBuilder) {
+							console.log("[Workflow] 使用Triple SQL Builder策略");
+							const tripleResult = await api.sqlBuilderTriple.buildWithVoting({
+								query: input.query,
+								slimSchema: schemaResult.result.slimSchema,
+								selectedTables: schemaResult.result.selectedTables,
+								sqlHints: {
+									...schemaResult.result.sqlHints,
+									vectorIds: vectorContext?.ids,
+								},
+							});
+							
+							// Convert to standard format
+							sqlBuildResult = {
+								result: tripleResult.result,
+								cached: false,
+								model: tripleResult.strategy,
+								difficulty: "triple",
+								voting: tripleResult.voting,
+							};
+							
+							console.log(`[Workflow] Triple策略选择: ${tripleResult.strategy}, 投票: ${JSON.stringify(tripleResult.voting.votes)}`);
+						} else {
+							sqlBuildResult = await api.sqlBuilder.build({
+								query: input.query,
+								slimSchema: schemaResult.result.slimSchema,
+								selectedTables: schemaResult.result.selectedTables,
+								sqlHints: {
+									...schemaResult.result.sqlHints,
+									vectorIds: vectorContext?.ids,
+								},
+							});
+						}
 
 						steps.push({
 							name: "SQLBuilding",
