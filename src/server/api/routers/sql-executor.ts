@@ -47,8 +47,7 @@ export const sqlExecutorRouter = createTRPCRouter({
 			const startTime = Date.now();
 			console.log("[SQLExecutor] 开始执行SQL:", {
 				queryType: input.queryType,
-				sqlPreview:
-					input.sql.substring(0, 100) + (input.sql.length > 100 ? "..." : ""),
+				sqlQuery: input.sql,
 				readOnly: input.readOnly,
 			});
 
