@@ -1,9 +1,11 @@
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
+import { queryContextManager } from "@/server/lib/query-context";
+import { schemaRegistry } from "@/server/lib/schema-registry";
 import { z } from "zod";
 import type { SimpleQueryAnalysis } from "./query-analyzer";
 import type { ResultFusionResult } from "./result-fusion";
 import type { SimpleSchemaSelectorResult } from "./schema-selector";
-import type { SimpleSQLBuilderResult } from "./sql-builder";
+import type { SQLBuilderResult } from "./sql-builder";
 import type { SQLExecutorResult } from "./sql-executor";
 import type { VectorSearchResult } from "./vector-search";
 
@@ -93,7 +95,8 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 
 			console.log("[Workflow] 开始执行查询工作流:", input.query);
 
-			let queryId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			// Generate unique query ID
+			const queryId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 			let finalStrategy: "sql_only" | "vector_only" | "hybrid" | "rejected" =
 				"rejected";
 			let finalData: Array<Record<string, unknown>> = [];
@@ -104,6 +107,15 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 			let sqlModel: string | undefined;
 			let sqlDifficulty: string | undefined;
 			let cacheHits = 0;
+
+			// Step 0: Register schema and create query context
+			const schemaRef = schemaRegistry.register(input.databaseSchema);
+			const queryContext = queryContextManager.create(
+				queryId,
+				input.query,
+				schemaRef,
+			);
+			console.log("[Workflow] Schema registered with ID:", schemaRef.schemaId);
 
 			try {
 				// Step 1: 查询分析
@@ -131,14 +143,20 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 				if ((analysisResult as any).cached) cacheHits++;
 
 				const analysis = analysisResult.analysis;
-				queryId = `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; // Generate queryId since simplified schema doesn't have it
 				finalStrategy = analysis.routing.strategy;
 
+				// Update query context with analysis results
+				queryContextManager.update(queryId, {
+					routing: {
+						strategy: analysis.routing.strategy,
+						confidence: analysis.routing.confidence,
+					},
+					analysis: analysis,
+				});
+				queryContextManager.addStep(queryId, "QueryAnalysis");
+
 				// 检查是否被拒绝
-				if (
-					analysis.routing.strategy === "rejected" ||
-					!analysis.feasible
-				) {
+				if (analysis.routing.strategy === "rejected" || !analysis.feasible) {
 					console.log("[Workflow] 查询被拒绝:", analysis.reason);
 					return {
 						queryId,
@@ -169,7 +187,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							fields: [vq.field],
 							searchText: vq.query,
 							searchType: "semantic" as const,
-							weight: 1.0
+							weight: 1.0,
 						}));
 						const vectorResult = await api.vectorSearch.search({
 							queries,
@@ -234,7 +252,7 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 									fields: [vq.field],
 									searchText: vq.query,
 									searchType: "semantic" as const,
-									weight: 1.0
+									weight: 1.0,
 								})),
 								hnswEf: 128,
 							}),
@@ -272,6 +290,12 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 								}),
 							),
 						};
+
+						// Update query context with vector results
+						queryContextManager.update(queryId, {
+							vectorContext: vectorContext,
+						});
+						queryContextManager.addStep(queryId, "VectorSearch");
 
 						// Store schema result
 						schemaResult = schemaPreparation;
@@ -327,13 +351,66 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 						console.log("[Workflow] Step 3: SQL构建");
 						const sqlBuildStartTime = Date.now();
 
+						// Transform schema selector result to SQL builder format
+						const selectedTables = schemaResult.result.tables.map(
+							(tableName: string) => ({
+								tableName,
+								fields: schemaResult.result.fields[tableName] || [],
+								reason: "Selected by schema selector",
+								isJoinTable: false,
+							}),
+						);
+
+						// Transform join hints
+						const joinHints = schemaResult.result.joins
+							?.map((joinStr: string) => {
+								// Parse join string like "companies INNER JOIN contacts ON companies.id = contacts.companyId"
+								const match = joinStr.match(
+									/(\w+)\s+(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)\s+ON\s+(.+)/i,
+								);
+								if (match && match[1] && match[2] && match[3] && match[4]) {
+									return {
+										from: match[1],
+										type: match[2].toUpperCase() as "INNER" | "LEFT" | "RIGHT",
+										to: match[3],
+										on: match[4],
+									};
+								}
+								return null;
+							})
+							.filter((x: any): x is NonNullable<typeof x> => x !== null);
+
+						// Transform time field
+						const timeFields = schemaResult.result.timeField
+							? [
+									{
+										table: schemaResult.result.timeField.split(".")[0] || "",
+										field:
+											schemaResult.result.timeField.split(".")[1] ||
+											schemaResult.result.timeField,
+										dataType: "integer" as const,
+										format: "timestamp" as const,
+									},
+								]
+							: undefined;
+
+						// Get the actual schema for selected tables
+						const slimSchema: Record<string, any> = {};
+						schemaResult.result.tables.forEach((tableName: string) => {
+							if (parsedSchema[tableName]) {
+								slimSchema[tableName] = parsedSchema[tableName];
+							}
+						});
+
 						const sqlBuildResult = await api.sqlBuilder.build({
 							query: input.query,
-							tables: schemaResult.result.tables,
-							fields: schemaResult.result.fields,
-							joins: schemaResult.result.joins,
-							timeField: schemaResult.result.timeField,
-							vectorIds: vectorContext?.ids,
+							slimSchema: slimSchema,
+							selectedTables,
+							sqlHints: {
+								joinHints,
+								timeFields,
+								vectorIds: vectorContext?.ids,
+							},
 						});
 
 						steps.push({
@@ -396,13 +473,18 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 											tables: schemaResult.result.tables.map(
 												(tableName: string) => {
 													const tableSchema = parsedSchema[tableName];
-													const fields = schemaResult.result.fields[tableName] || [];
+													const fields =
+														schemaResult.result.fields[tableName] || [];
 													return {
 														name: tableName,
 														columns: fields.map((fieldName: string) => ({
 															name: fieldName,
-															type: tableSchema?.columns?.[fieldName]?.type || "text",
-															nullable: tableSchema?.columns?.[fieldName]?.nullable || true,
+															type:
+																tableSchema?.columns?.[fieldName]?.type ||
+																"text",
+															nullable:
+																tableSchema?.columns?.[fieldName]?.nullable ||
+																true,
 														})),
 													};
 												},
@@ -493,6 +575,11 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 					totalTime: Date.now() - startTime,
 				});
 
+				// Periodic cleanup of old contexts (10% chance)
+				if (Math.random() < 0.1) {
+					queryContextManager.cleanup();
+				}
+
 				return {
 					queryId,
 					status: "success" as const,
@@ -528,6 +615,11 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 							error: errorMessage,
 						});
 					}
+				}
+
+				// Periodic cleanup of old contexts (10% chance)
+				if (Math.random() < 0.1) {
+					queryContextManager.cleanup();
 				}
 
 				return {
@@ -704,4 +796,24 @@ export const workflowOrchestratorRouter = createTRPCRouter({
 				],
 			};
 		}),
+
+	// Get optimization stats
+	getOptimizationStats: publicProcedure.query(() => {
+		return {
+			schemaRegistry: {
+				registeredSchemas: schemaRegistry.size(),
+				description: "Schemas registered for reference-based passing",
+			},
+			queryContext: {
+				// Note: In production, be careful about exposing internal data
+				description: "Query contexts managed for workflow execution",
+			},
+			optimizations: [
+				"Schema Registry: Pass schemas by reference instead of value",
+				"Query Context Manager: Centralized query state management",
+				"Aggressive Parallelization: Vector search and schema selection run concurrently in hybrid mode",
+				"Periodic Cleanup: Automatic memory management with 10% probability",
+			],
+		};
+	}),
 });

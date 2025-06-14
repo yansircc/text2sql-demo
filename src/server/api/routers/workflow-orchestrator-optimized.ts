@@ -116,15 +116,19 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 				if (strategy === "vector_only") {
 					// Direct vector search - no schema needed
 					if (!analysisResult.analysis.vectorQueries) {
-						throw new Error("Vector queries not available for vector_only strategy");
+						throw new Error(
+							"Vector queries not available for vector_only strategy",
+						);
 					}
-					const queries = analysisResult.analysis.vectorQueries.map((vq: any) => ({
-						table: vq.table,
-						fields: [vq.field],
-						searchText: vq.query,
-						searchType: "semantic" as const,
-						weight: 1.0
-					}));
+					const queries = analysisResult.analysis.vectorQueries.map(
+						(vq: any) => ({
+							table: vq.table,
+							fields: [vq.field],
+							searchText: vq.query,
+							searchType: "semantic" as const,
+							weight: 1.0,
+						}),
+					);
 					const vectorResult = await api.vectorSearch?.search({
 						queries,
 						hnswEf: 128,
@@ -155,7 +159,9 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 				// SQL or Hybrid path - use parallel execution
 				if (strategy === "sql_only" || strategy === "hybrid") {
 					if (!analysisResult.analysis.sqlTables) {
-						throw new Error("SQL tables not available for sql_only/hybrid strategy");
+						throw new Error(
+							"SQL tables not available for sql_only/hybrid strategy",
+						);
 					}
 					const tables = analysisResult.analysis.sqlTables;
 
@@ -176,13 +182,15 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 							// Vector search
 							analysisResult.analysis.vectorQueries
 								? api.vectorSearch.search({
-										queries: analysisResult.analysis.vectorQueries.map((vq: any) => ({
-											table: vq.table,
-											fields: [vq.field],
-											searchText: vq.query,
-											searchType: "semantic" as const,
-											weight: 1.0
-										})),
+										queries: analysisResult.analysis.vectorQueries.map(
+											(vq: any) => ({
+												table: vq.table,
+												fields: [vq.field],
+												searchText: vq.query,
+												searchType: "semantic" as const,
+												weight: 1.0,
+											}),
+										),
 										hnswEf: 128,
 									})
 								: null,
@@ -214,13 +222,65 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						}
 
 						// SQL building with context
+						// Transform schema selector result to SQL builder format
+						const selectedTables = schemaSelection.result.tables.map(
+							(tableName: string) => ({
+								tableName,
+								fields: schemaSelection.result.fields[tableName] || [],
+								reason: "Selected by schema selector",
+								isJoinTable: false,
+							}),
+						);
+
+						// Transform join hints
+						const joinHints = schemaSelection.result.joins
+							?.map((joinStr: string) => {
+								const match = joinStr.match(
+									/(\w+)\s+(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)\s+ON\s+(.+)/i,
+								);
+								if (match && match[1] && match[2] && match[3] && match[4]) {
+									return {
+										from: match[1],
+										type: match[2].toUpperCase() as "INNER" | "LEFT" | "RIGHT",
+										to: match[3],
+										on: match[4],
+									};
+								}
+								return null;
+							})
+							.filter((x): x is NonNullable<typeof x> => x !== null);
+
+						// Transform time field
+						const timeFields = schemaSelection.result.timeField
+							? [
+									{
+										table: schemaSelection.result.timeField.split(".")[0] || "",
+										field:
+											schemaSelection.result.timeField.split(".")[1] ||
+											schemaSelection.result.timeField,
+										dataType: "integer" as const,
+										format: "timestamp" as const,
+									},
+								]
+							: undefined;
+
+						// Get the actual schema for selected tables
+						const slimSchema: Record<string, any> = {};
+						schemaSelection.result.tables.forEach((tableName: string) => {
+							if (filteredSchema[tableName]) {
+								slimSchema[tableName] = filteredSchema[tableName];
+							}
+						});
+
 						const sqlBuildResult = await api.sqlBuilder.build({
 							query: input.query,
-							tables: schemaSelection.result.tables,
-							fields: schemaSelection.result.fields,
-							joins: schemaSelection.result.joins,
-							timeField: schemaSelection.result.timeField,
-							vectorIds: context.vectorContext?.ids,
+							slimSchema: slimSchema,
+							selectedTables,
+							sqlHints: {
+								joinHints,
+								timeFields,
+								vectorIds: context.vectorContext?.ids,
+							},
 						});
 
 						// Execute SQL
@@ -264,12 +324,64 @@ export const workflowOrchestratorOptimizedRouter = createTRPCRouter({
 						vectorIds: undefined,
 					});
 
+					// Transform schema selector result to SQL builder format
+					const selectedTables2 = schemaSelection.result.tables.map(
+						(tableName: string) => ({
+							tableName,
+							fields: schemaSelection.result.fields[tableName] || [],
+							reason: "Selected by schema selector",
+							isJoinTable: false,
+						}),
+					);
+
+					// Transform join hints
+					const joinHints2 = schemaSelection.result.joins
+						?.map((joinStr: string) => {
+							const match = joinStr.match(
+								/(\w+)\s+(INNER|LEFT|RIGHT)\s+JOIN\s+(\w+)\s+ON\s+(.+)/i,
+							);
+							if (match && match[1] && match[2] && match[3] && match[4]) {
+								return {
+									from: match[1],
+									type: match[2].toUpperCase() as "INNER" | "LEFT" | "RIGHT",
+									to: match[3],
+									on: match[4],
+								};
+							}
+							return null;
+						})
+						.filter((x): x is NonNullable<typeof x> => x !== null);
+
+					// Transform time field
+					const timeFields2 = schemaSelection.result.timeField
+						? [
+								{
+									table: schemaSelection.result.timeField.split(".")[0] || "",
+									field:
+										schemaSelection.result.timeField.split(".")[1] ||
+										schemaSelection.result.timeField,
+									dataType: "integer" as const,
+									format: "timestamp" as const,
+								},
+							]
+						: undefined;
+
+					// Get the actual schema for selected tables
+					const slimSchema2: Record<string, any> = {};
+					schemaSelection.result.tables.forEach((tableName: string) => {
+						if (filteredSchema[tableName]) {
+							slimSchema2[tableName] = filteredSchema[tableName];
+						}
+					});
+
 					const sqlBuildResult = await api.sqlBuilder.build({
 						query: input.query,
-						tables: schemaSelection.result.tables,
-						fields: schemaSelection.result.fields,
-						joins: schemaSelection.result.joins,
-						timeField: schemaSelection.result.timeField,
+						slimSchema: slimSchema2,
+						selectedTables: selectedTables2,
+						sqlHints: {
+							joinHints: joinHints2,
+							timeFields: timeFields2,
+						},
 					});
 
 					const sqlExecResult = await api.sqlExecutor.execute({

@@ -207,7 +207,7 @@ ${input.queryType ? `查询类型：${input.queryType}` : ""}
 
 				// 使用AI生成修正结果
 				const result = await generateObject({
-					model: openai("gpt-4o"),
+					model: openai("gpt-4.1"),
 					system: "你是一个专业的SQL错误分析和修正专家，精通SQLite语法。",
 					prompt: errorAnalysisPrompt,
 					schema: SQLErrorHandlerResultSchema,
