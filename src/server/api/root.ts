@@ -1,4 +1,5 @@
 import { cacheRouter } from "@/server/api/routers/cache";
+import { pipelineComparisonRouter } from "@/server/api/routers/pipeline-comparison";
 import { qdrantRouter } from "@/server/api/routers/qdrant";
 import { queryAnalyzerRouter } from "@/server/api/routers/query-analyzer";
 import { resultFusionRouter } from "@/server/api/routers/result-fusion";
@@ -26,6 +27,9 @@ export const appRouter = createTRPCRouter({
 	resultFusion: resultFusionRouter,
 	workflow: workflowOrchestratorRouter,
 	workflowOptimized: workflowOrchestratorOptimizedRouter,
+
+	// 测试与比较
+	pipelineComparison: pipelineComparisonRouter,
 
 	// 辅助功能
 	cache: cacheRouter,

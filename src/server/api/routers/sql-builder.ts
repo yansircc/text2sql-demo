@@ -1,11 +1,9 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-import { env } from "@/env";
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { cacheManager } from "@/server/lib/cache-manager";
+import { modelPicker } from "@/server/lib/model-picker";
 
 /**
  * SQL Builder Router - CloudFlare Workflow Step 3
@@ -252,7 +250,9 @@ export const sqlBuilderRouter = createTRPCRouter({
 
 			// Check cache first
 			const cached = await cacheManager.getSqlGeneration(cacheKey);
-			if (cached) {
+			// Temporarily disable cache to debug the issue
+			const skipCache = true; // TODO: Remove this after fixing the schema issue
+			if (cached && !skipCache) {
 				console.log("[SQLBuilder] 使用缓存结果");
 				return {
 					success: true,
@@ -268,34 +268,6 @@ export const sqlBuilderRouter = createTRPCRouter({
 				// Estimate query difficulty
 				const difficulty = estimateQueryDifficulty(input);
 				console.log("[SQLBuilder] 查询难度评估:", difficulty);
-
-				// Initialize AI clients
-				const anthropic = createAnthropic({
-					apiKey: env.AIHUBMIX_API_KEY,
-					baseURL: env.AIHUBMIX_BASE_URL,
-				});
-
-				const openai = createOpenAI({
-					apiKey: env.AIHUBMIX_API_KEY,
-					baseURL: env.AIHUBMIX_BASE_URL,
-				});
-
-				// Select model based on difficulty
-				let model: any;
-				switch (difficulty.level) {
-					case "easy":
-						model = openai("gpt-4.1");
-						console.log("[SQLBuilder] 使用 GPT-4.1 (快速模式)");
-						break;
-					case "hard":
-						model = anthropic("claude-sonnet-4-20250514");
-						console.log("[SQLBuilder] 使用 Claude Sonnet (精确模式)");
-						break;
-					case "very_hard":
-						model = anthropic("claude-opus-4-20250514");
-						console.log("[SQLBuilder] 使用 Claude Opus (高级推理模式)");
-						break;
-				}
 
 				// 构建SQL提示
 				let sqlHintsPrompt = "";
@@ -331,6 +303,14 @@ export const sqlBuilderRouter = createTRPCRouter({
 					});
 				}
 
+				// Log the schema to debug
+				console.log("[SQLBuilder] Schema being used:", {
+					tables: Object.keys(input.slimSchema),
+					firstTableColumns: input.slimSchema[Object.keys(input.slimSchema)[0]]?.columns ? 
+						Object.keys(input.slimSchema[Object.keys(input.slimSchema)[0]].columns).slice(0, 5) : 
+						"No columns found"
+				});
+
 				const systemPrompt = `你是SQLite SQL专家。基于提供的schema和提示生成优化的SQL语句。
 
 查询需求: ${input.query}
@@ -356,13 +336,30 @@ SQLite注意事项:
 3. 适当使用LIMIT避免返回过多数据
 4. 对于聚合查询，使用GROUP BY和聚合函数`;
 
-				const { object: result } = await generateObject({
-					model,
-					system: systemPrompt,
-					prompt: "生成SQL语句",
-					schema: SQLBuilderResultSchema,
-					temperature: 0.1,
-				});
+				// Use smart model picker with progressive rollback
+				const {
+					result,
+					model: usedModel,
+					attempts,
+				} = await modelPicker.executeWithRollback(
+					"sql-building",
+					async (modelInstance) => {
+						const { object } = await generateObject({
+							model: modelInstance,
+							system: systemPrompt,
+							prompt: "生成SQL语句",
+							schema: SQLBuilderResultSchema,
+							temperature: 0.1,
+						});
+						return object;
+					},
+					{
+						complexity: difficulty.level,
+						preferSpeed: difficulty.level === "easy",
+						minQuality: difficulty.level === "very_hard" ? 9 : 6,
+						contextSize: systemPrompt.length + 1000, // Approximate context size
+					},
+				);
 
 				// Cache the result
 				await cacheManager.setSqlGeneration(cacheKey, result);
@@ -374,12 +371,8 @@ SQLite注意事项:
 					hasWarnings: result.warnings && result.warnings.length > 0,
 					difficulty: difficulty.level,
 					difficultyScore: difficulty.score,
-					model:
-						difficulty.level === "easy"
-							? "GPT-4.1"
-							: difficulty.level === "hard"
-								? "Claude Sonnet"
-								: "Claude Opus",
+					model: usedModel,
+					attempts: attempts,
 					executionTime: Date.now() - startTime,
 				});
 
@@ -388,17 +381,29 @@ SQLite注意事项:
 					result,
 					executionTime: Date.now() - startTime,
 					cached: false,
-					model:
-						difficulty.level === "easy"
-							? "GPT-4.1"
-							: difficulty.level === "hard"
-								? "Claude Sonnet"
-								: "Claude Opus",
+					model: usedModel,
 					difficulty: difficulty.level,
+					attempts: attempts,
 				};
 			} catch (error) {
 				console.error("[SQLBuilder] 构建错误:", error);
 				throw new Error("SQL构建失败");
 			}
 		}),
+
+	// Get model picker stats for SQL building
+	getModelStats: publicProcedure.query(() => {
+		const stats = modelPicker.getStats("sql-building");
+		return {
+			taskType: "sql-building",
+			stats: stats,
+			description: "Model usage statistics for SQL query generation",
+			features: [
+				"Progressive rollback on failure",
+				"Historical learning from past executions",
+				"Automatic model selection based on complexity",
+				"Cost-optimized model choices",
+			],
+		};
+	}),
 });

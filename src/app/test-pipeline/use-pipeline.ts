@@ -8,7 +8,7 @@ export function usePipeline() {
 	const [results, setResults] = useState<PipelineResults>({});
 
 	// 新版工作流 API
-	const workflowMutation = api.workflow.execute.useMutation();
+	const workflowMutation = (api as any).workflow.execute.useMutation();
 
 	// 执行查询
 	const executeQuery = async () => {
